@@ -263,6 +263,37 @@ def _render_last_week_summary() -> None:
         st.bar_chart(chart_df, height=120, use_container_width=True)
 
 # ---------------------------------------------------------------------------
+# Coaching assessment banner
+# ---------------------------------------------------------------------------
+
+_SIGNAL_DOT = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}
+_CRITERIA_META = {
+    "volume":          "Volume",
+    "sport_balance":   "Sport Balance",
+    "progression":     "Progression",
+    "event_readiness": "Event Readiness",
+}
+
+
+def _render_coaching_assessment(assessment: dict) -> None:
+    """Compact one-row-per-criterion banner with signal dots."""
+    rows = [(k, _CRITERIA_META[k]) for k in _CRITERIA_META if k in assessment]
+    if not rows:
+        return
+    with st.container(border=True):
+        st.caption("**Coaching overview**")
+        for key, label in rows:
+            c = assessment[key]
+            dot = _SIGNAL_DOT.get(c.get("signal", ""), "⚪")
+            explanation = c.get("explanation", "")
+            suggestion = c.get("suggestion_or_affirmation", "")
+            line = f"{dot} **{label}** — {explanation}"
+            if suggestion:
+                line += f" *{suggestion}*"
+            st.markdown(line)
+
+
+# ---------------------------------------------------------------------------
 # Page: Weekly Plan
 # ---------------------------------------------------------------------------
 
@@ -354,6 +385,9 @@ def render_weekly_plan() -> None:
             week_goal = plan.get("week_goal", "")
             if week_goal:
                 st.markdown(f"_{week_goal}_")
+
+            if plan.get("coaching_assessment"):
+                _render_coaching_assessment(plan["coaching_assessment"])
 
             vs = plan.get("validation_summary", {})
             if vs.get("days_repaired") or vs.get("days_fallback"):

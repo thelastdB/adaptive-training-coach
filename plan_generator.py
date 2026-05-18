@@ -1,5 +1,6 @@
 import json
 import re
+import statistics
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
@@ -1021,7 +1022,256 @@ Return a JSON object:
     except Exception as exc:
         print(f"Warning: could not persist plan to database: {exc}")
 
+    try:
+        plan["coaching_assessment"] = assess_training_week(plan, recent_activities, goals)
+    except Exception as exc:
+        print(f"Warning: coaching assessment failed: {exc}")
+
     return plan
+
+
+# ---------------------------------------------------------------------------
+# Coaching assessment
+# ---------------------------------------------------------------------------
+
+# Maps goal-profile sport labels to plan activity_type values
+_SPORT_LABEL_TO_TYPES: dict[str, set[str]] = {
+    "Cycling":   {"Ride", "VirtualRide"},
+    "Running":   {"Run"},
+    "Triathlon": {"Ride", "VirtualRide", "Run", "Swim"},
+    "Swimming":  {"Swim"},
+}
+
+
+def _compute_assessment_signals(
+    plan: dict,
+    recent_activities: list[dict],
+    goals: dict | None,
+) -> dict:
+    """Deterministic layer: compute RED/YELLOW/GREEN per criterion."""
+    today = datetime.now(tz=timezone.utc).date()
+    planned_days = plan.get("days", [])
+    planned_minutes = sum(d.get("duration_minutes", 0) for d in planned_days)
+
+    # 4-week average weekly volume
+    cutoff_4w = today - timedelta(days=28)
+    acts_4w = [a for a in recent_activities if a["date"] >= cutoff_4w]
+    weekly_bucket: dict[tuple, int] = defaultdict(int)
+    for act in acts_4w:
+        wk = act["date"].isocalendar()[:2]
+        weekly_bucket[wk] += act["duration_seconds"] // 60
+    avg_weekly_mins = (
+        statistics.mean(weekly_bucket.values()) if weekly_bucket else 0
+    )
+
+    # Last 7-day actual volume
+    cutoff_1w = today - timedelta(days=7)
+    last_week_mins = sum(
+        a["duration_seconds"] // 60
+        for a in recent_activities if a["date"] >= cutoff_1w
+    )
+
+    signals: dict[str, dict] = {}
+
+    # -- Volume ---------------------------------------------------------------
+    if avg_weekly_mins > 0:
+        vol_delta = abs(planned_minutes - avg_weekly_mins) / avg_weekly_mins
+        vol_signal = "GREEN" if vol_delta <= 0.10 else ("YELLOW" if vol_delta <= 0.25 else "RED")
+    else:
+        vol_delta = 0.0
+        vol_signal = "YELLOW"
+
+    signals["volume"] = {
+        "signal":              vol_signal,
+        "planned_minutes":     planned_minutes,
+        "avg_weekly_minutes":  round(avg_weekly_mins),
+        "delta_pct":           round(vol_delta * 100),
+    }
+
+    # -- Sport balance --------------------------------------------------------
+    primary_label = (goals or {}).get("sport_preferences", {}).get("primary_sport", "")
+    primary_types = _SPORT_LABEL_TO_TYPES.get(primary_label, set())
+    primary_minutes = sum(
+        d.get("duration_minutes", 0) for d in planned_days
+        if d.get("activity_type", "") in primary_types
+    )
+    if planned_minutes > 0 and primary_types:
+        balance_pct = primary_minutes / planned_minutes
+        bal_signal = "GREEN" if balance_pct >= 0.60 else ("YELLOW" if balance_pct >= 0.40 else "RED")
+    else:
+        balance_pct = 0.0
+        bal_signal = "YELLOW"
+
+    signals["sport_balance"] = {
+        "signal":          bal_signal,
+        "primary_sport":   primary_label or "unset",
+        "primary_minutes": primary_minutes,
+        "total_minutes":   planned_minutes,
+        "primary_pct":     round(balance_pct * 100),
+    }
+
+    # -- Progression ----------------------------------------------------------
+    if last_week_mins > 0:
+        prog_delta = abs(planned_minutes - last_week_mins) / last_week_mins
+        prog_signal = "GREEN" if prog_delta <= 0.15 else ("YELLOW" if prog_delta <= 0.25 else "RED")
+    else:
+        prog_delta = 0.0
+        prog_signal = "YELLOW"
+
+    signals["progression"] = {
+        "signal":            prog_signal,
+        "planned_minutes":   planned_minutes,
+        "last_week_minutes": last_week_mins,
+        "delta_pct":         round(prog_delta * 100),
+    }
+
+    # -- Event readiness (nearest event within 90 days) -----------------------
+    upcoming = (goals or {}).get("upcoming_events") or []
+    nearest_event: dict | None = None
+    nearest_days: int | None = None
+    for ev in upcoming:
+        try:
+            ev_date = date.fromisoformat(str(ev["date"]))
+            days_left = (ev_date - today).days
+            if 0 <= days_left <= 90:
+                if nearest_days is None or days_left < nearest_days:
+                    nearest_days = days_left
+                    nearest_event = ev
+        except (ValueError, KeyError, TypeError):
+            pass
+
+    if nearest_event and nearest_days is not None:
+        has_hard = any(d.get("intensity") == "hard" for d in planned_days)
+        hard_count = sum(1 for d in planned_days if d.get("intensity") == "hard")
+
+        if nearest_days > 60:
+            phase = "build"
+            ev_signal = "GREEN" if vol_delta <= 0.25 else "YELLOW"
+        elif nearest_days > 30:
+            phase = "peak_build"
+            if planned_minutes >= avg_weekly_mins * 0.90 and has_hard:
+                ev_signal = "GREEN"
+            elif planned_minutes >= avg_weekly_mins * 0.75:
+                ev_signal = "YELLOW"
+            else:
+                ev_signal = "RED"
+        elif nearest_days > 14:
+            phase = "taper"
+            if planned_minutes <= avg_weekly_mins * 0.85:
+                ev_signal = "GREEN"
+            elif planned_minutes <= avg_weekly_mins:
+                ev_signal = "YELLOW"
+            else:
+                ev_signal = "RED"
+        else:
+            phase = "taper_hard"
+            if planned_minutes <= avg_weekly_mins * 0.70 and hard_count == 0:
+                ev_signal = "GREEN"
+            elif hard_count <= 1:
+                ev_signal = "YELLOW"
+            else:
+                ev_signal = "RED"
+
+        signals["event_readiness"] = {
+            "signal":       ev_signal,
+            "event_name":   nearest_event.get("name", "Upcoming event"),
+            "days_until":   nearest_days,
+            "phase":        phase,
+            "planned_minutes":    planned_minutes,
+            "avg_weekly_minutes": round(avg_weekly_mins),
+            "hard_sessions":      hard_count,
+        }
+
+    return signals
+
+
+def _enrich_signals_with_llm(signals: dict, plan: dict, goals: dict | None) -> dict:
+    """LLM layer: add one-sentence explanation + suggestion/affirmation per criterion."""
+    PHASE_LABELS = {
+        "build":      "build phase (>60 days out)",
+        "peak_build": "peak build phase (30-60 days out)",
+        "taper":      "taper phase (14-30 days out)",
+        "taper_hard": "hard taper phase (<14 days out)",
+    }
+
+    context_lines = []
+    for key, data in signals.items():
+        sig = data["signal"]
+        if key == "volume":
+            context_lines.append(
+                f"Volume [{sig}]: {data['planned_minutes']}min planned vs "
+                f"{data['avg_weekly_minutes']}min 4-week avg ({data['delta_pct']}% delta)"
+            )
+        elif key == "sport_balance":
+            context_lines.append(
+                f"Sport balance [{sig}]: {data['primary_pct']}% of planned time "
+                f"in primary sport ({data['primary_sport']})"
+            )
+        elif key == "progression":
+            context_lines.append(
+                f"Progression [{sig}]: {data['planned_minutes']}min planned vs "
+                f"{data['last_week_minutes']}min last week ({data['delta_pct']}% change)"
+            )
+        elif key == "event_readiness":
+            phase_label = PHASE_LABELS.get(data["phase"], data["phase"])
+            context_lines.append(
+                f"Event readiness [{sig}]: '{data['event_name']}' in {data['days_until']} days "
+                f"({phase_label}); {data['hard_sessions']} hard session(s) planned"
+            )
+
+    criteria_json = {
+        k: {"signal": v["signal"], "explanation": "", "suggestion_or_affirmation": ""}
+        for k, v in signals.items()
+    }
+
+    prompt = f"""\
+You are reviewing an automated training plan assessment. Four criteria have been scored \
+GREEN/YELLOW/RED by deterministic rules. Write a brief explanation for each and either \
+a specific suggestion (if YELLOW/RED) or a short affirmation (if GREEN).
+
+SIGNALS:
+{chr(10).join(context_lines)}
+
+PLAN: {plan.get('week_goal', '')}
+
+Rules:
+- explanation: one sentence stating WHY the signal was assigned
+- suggestion_or_affirmation: one sentence — specific fix if YELLOW/RED, short affirmation if GREEN
+- Keep both under 20 words each
+
+Return only this JSON (no other text):
+{json.dumps(criteria_json, indent=2)}\
+"""
+
+    client = anthropic.Anthropic()
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=600,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    result = parse_json_response(response.content[0].text)
+
+    # Guarantee signal values come from the deterministic layer
+    for key, data in signals.items():
+        if key in result:
+            result[key]["signal"] = data["signal"]
+        else:
+            result[key] = {"signal": data["signal"], "explanation": "", "suggestion_or_affirmation": ""}
+
+    return result
+
+
+def assess_training_week(
+    plan: dict,
+    recent_activities: list[dict],
+    goals: dict | None = None,
+) -> dict:
+    """
+    Compute a coaching assessment for the generated plan.
+    Returns a dict keyed by criterion with signal, explanation, suggestion_or_affirmation.
+    """
+    signals = _compute_assessment_signals(plan, recent_activities, goals)
+    return _enrich_signals_with_llm(signals, plan, goals)
 
 
 # ---------------------------------------------------------------------------
