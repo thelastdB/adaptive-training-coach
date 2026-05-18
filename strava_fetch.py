@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from stravalib import Client
 
+from db import save_activities
+
 logging.getLogger("stravalib").setLevel(logging.ERROR)
 
 
@@ -44,9 +46,21 @@ activities = client.get_activities(after=since)
 print(f"{'Date':<12} {'Type':<20} {'Distance':>10} {'Duration':>10}")
 print("-" * 56)
 
+rows = []
 for act in activities:
-    date = act.start_date_local.strftime("%Y-%m-%d")
+    date = act.start_date_local.date()
     sport = (act.sport_type or act.type).root
-    distance = f"{float(act.distance) / 1000:.2f} km"
-    duration = fmt_duration(act.moving_time)
-    print(f"{date:<12} {sport:<20} {distance:>10} {duration:>10}")
+    distance_km = float(act.distance) / 1000
+    duration_seconds = int(act.moving_time)
+    rows.append({
+        "strava_id": act.id,
+        "date": date,
+        "activity_type": sport,
+        "distance_km": distance_km,
+        "duration_seconds": duration_seconds,
+        "name": act.name or "",
+    })
+    print(f"{str(date):<12} {sport:<20} {distance_km:>9.2f} km {fmt_duration(duration_seconds):>10}")
+
+saved = save_activities(rows)
+print(f"\n{saved} activities saved to training.db")
