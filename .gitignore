@@ -11,4 +11,5 @@ wheels/
 .env
 training.db
 faiss_store/
+eval_results/
 output.txt
