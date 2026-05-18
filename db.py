@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Column, Date, Float, Integer, String, create_engine
+from sqlalchemy import Column, Date, Float, Integer, String, create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session
 from sqlalchemy.pool import NullPool
 
@@ -21,9 +21,41 @@ class Activity(Base):
     distance_km = Column(Float, nullable=False)
     duration_seconds = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
+    average_heartrate = Column(Float, nullable=True)
+    max_heartrate = Column(Float, nullable=True)
+    average_watts = Column(Float, nullable=True)
+    weighted_average_watts = Column(Integer, nullable=True)
+    total_elevation_gain = Column(Float, nullable=True)
+    average_speed = Column(Float, nullable=True)   # km/h
+    suffer_score = Column(Integer, nullable=True)
+    workout_type = Column(Integer, nullable=True)
 
 
 Base.metadata.create_all(engine)
+
+
+def _migrate() -> None:
+    """Add new columns to existing tables without dropping data."""
+    inspector = inspect(engine)
+    existing = {col["name"] for col in inspector.get_columns("activities")}
+    additions = {
+        "average_heartrate": "FLOAT",
+        "max_heartrate": "FLOAT",
+        "average_watts": "FLOAT",
+        "weighted_average_watts": "INTEGER",
+        "total_elevation_gain": "FLOAT",
+        "average_speed": "FLOAT",
+        "suffer_score": "INTEGER",
+        "workout_type": "INTEGER",
+    }
+    with engine.connect() as conn:
+        for col, typ in additions.items():
+            if col not in existing:
+                conn.execute(text(f"ALTER TABLE activities ADD COLUMN {col} {typ}"))
+        conn.commit()
+
+
+_migrate()
 
 
 def save_activities(activities: list[dict]) -> int:
@@ -56,6 +88,14 @@ def get_activities(days: int | None = 90) -> list[dict]:
                 "distance_km": r.distance_km,
                 "duration_seconds": r.duration_seconds,
                 "name": r.name,
+                "average_heartrate": r.average_heartrate,
+                "max_heartrate": r.max_heartrate,
+                "average_watts": r.average_watts,
+                "weighted_average_watts": r.weighted_average_watts,
+                "total_elevation_gain": r.total_elevation_gain,
+                "average_speed": r.average_speed,
+                "suffer_score": r.suffer_score,
+                "workout_type": r.workout_type,
             }
             for r in rows
         ]

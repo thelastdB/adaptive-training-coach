@@ -11,3 +11,4 @@ wheels/
 .env
 training.db
 faiss_store/
+output.txt

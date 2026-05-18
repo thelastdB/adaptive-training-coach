@@ -23,8 +23,30 @@ def _activity_text(act: dict) -> str:
     h, rem = divmod(act["duration_seconds"], 3600)
     m, s = divmod(rem, 60)
     duration = f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
-    text = f"{act['date']} {act['activity_type']}: {act['distance_km']:.2f} km in {duration}"
-    if act["name"]:
+    parts = [f"{act['date']} {act['activity_type']}: {act['distance_km']:.2f} km in {duration}"]
+
+    details = []
+    if act.get("total_elevation_gain") is not None:
+        details.append(f"{act['total_elevation_gain']:.0f}m elev")
+    if act.get("average_watts") is not None:
+        wp = f"avg {act['average_watts']:.0f}W"
+        if act.get("weighted_average_watts") is not None:
+            wp += f" NP {act['weighted_average_watts']}W"
+        details.append(wp)
+    if act.get("average_heartrate") is not None:
+        hr = f"avg HR {act['average_heartrate']:.0f}"
+        if act.get("max_heartrate") is not None:
+            hr += f"/{act['max_heartrate']:.0f}"
+        hr += " bpm"
+        details.append(hr)
+    if act.get("suffer_score") is not None:
+        details.append(f"suffer {act['suffer_score']}")
+
+    if details:
+        parts.append(", ".join(details))
+
+    text = ", ".join(parts)
+    if act.get("name"):
         text += f" — {act['name']}"
     return text
 
@@ -57,6 +79,14 @@ def embed_activities() -> int:
             "distance_km": a["distance_km"],
             "duration_seconds": a["duration_seconds"],
             "name": a["name"],
+            "average_heartrate": a.get("average_heartrate"),
+            "max_heartrate": a.get("max_heartrate"),
+            "average_watts": a.get("average_watts"),
+            "weighted_average_watts": a.get("weighted_average_watts"),
+            "total_elevation_gain": a.get("total_elevation_gain"),
+            "average_speed": a.get("average_speed"),
+            "suffer_score": a.get("suffer_score"),
+            "workout_type": a.get("workout_type"),
             "text": t,
         }
         for a, t in zip(activities, texts)

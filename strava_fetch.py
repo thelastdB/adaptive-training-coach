@@ -46,6 +46,10 @@ activities = client.get_activities(after=since)
 print(f"{'Date':<12} {'Type':<20} {'Distance':>10} {'Duration':>10}")
 print("-" * 56)
 
+def _float(val) -> float | None:
+    return float(val) if val is not None else None
+
+
 rows = []
 for act in activities:
     date = act.start_date_local.date()
@@ -59,6 +63,14 @@ for act in activities:
         "distance_km": distance_km,
         "duration_seconds": duration_seconds,
         "name": act.name or "",
+        "average_heartrate": _float(act.average_heartrate),
+        "max_heartrate": _float(act.max_heartrate),
+        "average_watts": _float(act.average_watts),
+        "weighted_average_watts": act.weighted_average_watts,
+        "total_elevation_gain": _float(act.total_elevation_gain),
+        "average_speed": round(_float(act.average_speed) * 3.6, 2) if act.average_speed is not None else None,
+        "suffer_score": act.suffer_score,
+        "workout_type": act.workout_type,
     })
     print(f"{str(date):<12} {sport:<20} {distance_km:>9.2f} km {fmt_duration(duration_seconds):>10}")
 
