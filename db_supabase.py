@@ -11,12 +11,14 @@ run the setup SQL directly in the Supabase dashboard SQL editor.
 import json
 import os
 import statistics
+import time
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 import psycopg2
 import psycopg2.extras
+import requests as _http
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -79,11 +81,27 @@ def setup_schema() -> None:
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
-                    id               BIGSERIAL PRIMARY KEY,
-                    strava_athlete_id BIGINT UNIQUE NOT NULL,
-                    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    id                  BIGSERIAL PRIMARY KEY,
+                    strava_athlete_id   BIGINT      UNIQUE NOT NULL,
+                    access_token        TEXT,
+                    refresh_token       TEXT,
+                    token_expires_at    BIGINT,
+                    athlete_name        TEXT,
+                    athlete_profile_pic TEXT,
+                    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 )
             """)
+            # Idempotent migrations for existing installs that have the old minimal schema
+            for col, ddl in [
+                ("access_token",        "TEXT"),
+                ("refresh_token",       "TEXT"),
+                ("token_expires_at",    "BIGINT"),
+                ("athlete_name",        "TEXT"),
+                ("athlete_profile_pic", "TEXT"),
+            ]:
+                cur.execute(
+                    f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {ddl}"
+                )
 
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS activities (
@@ -150,9 +168,9 @@ def setup_schema() -> None:
 
 def get_or_create_user(strava_athlete_id: int) -> str:
     """
-    Upsert a user keyed by strava_athlete_id.
-    Returns user_id as str(strava_athlete_id) for drop-in compatibility with
-    the 'local' string convention used everywhere else.
+    Upsert a minimal user record keyed by strava_athlete_id.
+    Returns user_id as str(strava_athlete_id).
+    Prefer upsert_user() for OAuth flows that supply token and profile data.
     """
     with _conn() as conn:
         with conn.cursor() as cur:
@@ -162,9 +180,109 @@ def get_or_create_user(strava_athlete_id: int) -> str:
                 VALUES (%s)
                 ON CONFLICT (strava_athlete_id) DO NOTHING
                 """,
-                (strava_athlete_id,),
+                (int(strava_athlete_id),),
             )
     return str(strava_athlete_id)
+
+
+def upsert_user(
+    strava_athlete_id: int | str,
+    access_token: str,
+    refresh_token: str,
+    token_expires_at: int,
+    athlete_name: str,
+    athlete_profile_pic: str,
+) -> str:
+    """
+    Upsert a user with full OAuth token and profile data.
+    Returns user_id = str(strava_athlete_id), which is the value stored in
+    the user_id column of activities / goals / plans tables.
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users
+                    (strava_athlete_id, access_token, refresh_token,
+                     token_expires_at, athlete_name, athlete_profile_pic)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (strava_athlete_id) DO UPDATE SET
+                    access_token        = EXCLUDED.access_token,
+                    refresh_token       = EXCLUDED.refresh_token,
+                    token_expires_at    = EXCLUDED.token_expires_at,
+                    athlete_name        = EXCLUDED.athlete_name,
+                    athlete_profile_pic = EXCLUDED.athlete_profile_pic
+                """,
+                (
+                    int(strava_athlete_id),
+                    access_token,
+                    refresh_token,
+                    token_expires_at,
+                    athlete_name,
+                    athlete_profile_pic,
+                ),
+            )
+    return str(strava_athlete_id)
+
+
+def get_user_by_strava_id(strava_athlete_id: int | str) -> dict | None:
+    """Return the full users row for a given Strava athlete id, or None."""
+    with _conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM users WHERE strava_athlete_id = %s",
+                (int(strava_athlete_id),),
+            )
+            row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def refresh_strava_token(user_id: str) -> str:
+    """
+    Return a valid Strava access token for user_id (= str(strava_athlete_id)).
+    If the stored token expires within 5 minutes, calls the Strava refresh
+    endpoint, persists the new tokens, and returns the fresh access_token.
+
+    Raises RuntimeError if no user record is found.
+    Requires STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET in the environment.
+    """
+    user = get_user_by_strava_id(user_id)
+    if user is None:
+        raise RuntimeError(f"No user record found for user_id={user_id!r}")
+
+    expires_at = user.get("token_expires_at") or 0
+    if int(expires_at) > time.time() + 300:
+        return user["access_token"]
+
+    resp = _http.post(
+        "https://www.strava.com/oauth/token",
+        data={
+            "client_id":     os.environ["STRAVA_CLIENT_ID"],
+            "client_secret": os.environ["STRAVA_CLIENT_SECRET"],
+            "refresh_token": user["refresh_token"],
+            "grant_type":    "refresh_token",
+        },
+        timeout=15,
+    )
+    resp.raise_for_status()
+    token_data = resp.json()
+
+    new_access  = token_data["access_token"]
+    new_refresh = token_data["refresh_token"]
+    new_expires = int(token_data["expires_at"])
+
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE users
+                SET access_token = %s, refresh_token = %s, token_expires_at = %s
+                WHERE strava_athlete_id = %s
+                """,
+                (new_access, new_refresh, new_expires, int(user_id)),
+            )
+
+    return new_access
 
 
 # ---------------------------------------------------------------------------

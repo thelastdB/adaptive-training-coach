@@ -897,6 +897,7 @@ def generate_plan(
     goals: dict | None = None,
     units: str = "imperial",
     on_token=None,
+    user_id: str = "local",
 ) -> dict:
     """
     Generate a structured weekly training plan.
@@ -909,9 +910,10 @@ def generate_plan(
         goals:              Persisted athlete profile from get_goals(); optional
         units:              "imperial" or "metric" — controls temp display in prompt
         on_token:           Optional callback(chars: int) called during streaming
+        user_id:            Authenticated user id for DB writes (default "local")
     """
     if recent_activities is None:
-        recent_activities = get_activities(days=90)
+        recent_activities = get_activities(days=90, user_id=user_id)
 
     training_load = _training_load_summary(recent_activities)
     examples = search_activities(goal, n=5)
@@ -1017,7 +1019,7 @@ Return a JSON object:
     }
 
     try:
-        plan_id = save_plan(schedule, goal, plan)
+        plan_id = save_plan(schedule, goal, plan, user_id=user_id)
         plan["plan_id"] = plan_id
     except Exception as exc:
         print(f"Warning: could not persist plan to database: {exc}")

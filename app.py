@@ -5,11 +5,14 @@ Sidebar navigation: Weekly Plan · Plan History · Profile & Goals
 """
 
 import json
+import os
 from collections import defaultdict
 from datetime import date, timedelta
+from urllib.parse import urlencode
 
 import anthropic
 import pandas as pd
+import requests
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -20,8 +23,10 @@ from db_supabase import (
     get_plan,
     get_plans,
     rate_plan,
+    refresh_strava_token,
     save_goals,
     setup_schema,
+    upsert_user,
 )
 from plan_generator import (
     MODEL,
@@ -94,9 +99,9 @@ st.set_page_config(
 # Session state initialisation
 # ---------------------------------------------------------------------------
 
-def _init_state() -> None:
+def _init_state(user_id: str) -> None:
     if "goals" not in st.session_state:
-        st.session_state.goals = get_goals()
+        st.session_state.goals = get_goals(user_id=user_id)
 
     if "current_plan" not in st.session_state:
         st.session_state.current_plan = None
@@ -118,23 +123,20 @@ def _init_state() -> None:
 
     st.session_state.setdefault("week_notes", "")
 
-
-_init_state()
-
 # ---------------------------------------------------------------------------
 # Cached data helpers
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=300)
-def _load_data(days: int = 90):
-    """Return (activities list, athlete_metrics dict). Cached 5 min."""
-    acts = get_activities(days=days)
+def _load_data(user_id: str, days: int = 90):
+    """Return (activities list, athlete_metrics dict). Cached 5 min per user."""
+    acts = get_activities(days=days, user_id=user_id)
     return acts, athlete_metrics(acts)
 
 
 @st.cache_data(ttl=60)
-def _load_last_week():
-    return get_activities(days=7)
+def _load_last_week(user_id: str):
+    return get_activities(days=7, user_id=user_id)
 
 # ---------------------------------------------------------------------------
 # Schedule helpers
@@ -252,8 +254,9 @@ def _render_day_card(
 
 
 def _render_last_week_summary() -> None:
+    user_id = st.session_state.get("user_id", "local")
     with st.expander("📊 Last week's training", expanded=False):
-        acts = _load_last_week()
+        acts = _load_last_week(user_id)
         if not acts:
             st.caption("No activities in the past 7 days.")
             return
@@ -322,6 +325,7 @@ def _render_coaching_assessment(assessment: dict) -> None:
 def _run_generation(schedule: dict, goal: str, recent_acts: list, athlete_m: dict) -> None:
     goals = st.session_state.goals
     units = (goals or {}).get("units", "imperial")
+    user_id = st.session_state.get("user_id", "local")
 
     progress = st.empty()
 
@@ -335,6 +339,7 @@ def _run_generation(schedule: dict, goal: str, recent_acts: list, athlete_m: dic
         goals=goals,
         units=units,
         on_token=on_token,
+        user_id=user_id,
     )
     progress.empty()
     st.session_state.current_plan = plan
@@ -342,10 +347,11 @@ def _run_generation(schedule: dict, goal: str, recent_acts: list, athlete_m: dic
 
 
 def render_weekly_plan() -> None:
+    user_id = st.session_state.get("user_id", "local")
     st.title("Weekly Plan")
     _render_last_week_summary()
 
-    recent_acts, athlete_m = _load_data(days=90)
+    recent_acts, athlete_m = _load_data(user_id, days=90)
 
     left, right = st.columns([1, 2], gap="large")
 
@@ -438,14 +444,15 @@ def render_weekly_plan() -> None:
 # ---------------------------------------------------------------------------
 
 def render_plan_history() -> None:
+    user_id = st.session_state.get("user_id", "local")
     st.title("Plan History")
-    plans = get_plans(limit=20)
+    plans = get_plans(user_id=user_id, limit=20)
 
     if not plans:
         st.info("No plans yet. Generate your first plan on the Weekly Plan page.")
         return
 
-    _, athlete_m = _load_data(days=90)
+    _, athlete_m = _load_data(user_id, days=90)
 
     for p in plans:
         created = (p.get("created_at") or "")[:10]
@@ -478,6 +485,7 @@ def render_plan_history() -> None:
 # ---------------------------------------------------------------------------
 
 def render_profile() -> None:
+    user_id = st.session_state.get("user_id", "local")
     st.title("Profile & Goals")
 
     goals = st.session_state.goals or {}
@@ -545,8 +553,8 @@ def render_profile() -> None:
             },
             "upcoming_events": st.session_state.events_draft,
         }
-        save_goals(new_goals)
-        st.session_state.goals = get_goals()
+        save_goals(new_goals, user_id=user_id)
+        st.session_state.goals = get_goals(user_id=user_id)
         st.cache_data.clear()
         st.success("Profile saved.")
 
@@ -640,6 +648,114 @@ def render_profile() -> None:
                 st.warning("Event name is required.")
 
 # ---------------------------------------------------------------------------
+# OAuth helpers
+# ---------------------------------------------------------------------------
+
+def _strava_oauth_url() -> str:
+    redirect_uri = os.environ.get("STREAMLIT_APP_URL", "http://localhost:8501")
+    return "https://www.strava.com/oauth/authorize?" + urlencode({
+        "client_id":      os.environ["STRAVA_CLIENT_ID"],
+        "redirect_uri":   redirect_uri,
+        "response_type":  "code",
+        "scope":          "activity:read_all",
+        "approval_prompt": "force",
+    })
+
+
+def _handle_oauth_callback() -> None:
+    """
+    If Strava has redirected back with ?code=..., exchange it for tokens,
+    store the user in Supabase, populate session_state, then rerun cleanly.
+    """
+    code = st.query_params.get("code")
+    if not code:
+        return
+
+    with st.spinner("Connecting to Strava…"):
+        try:
+            resp = requests.post(
+                "https://www.strava.com/oauth/token",
+                data={
+                    "client_id":     os.environ["STRAVA_CLIENT_ID"],
+                    "client_secret": os.environ["STRAVA_CLIENT_SECRET"],
+                    "code":          code,
+                    "grant_type":    "authorization_code",
+                },
+                timeout=15,
+            )
+            resp.raise_for_status()
+            token_data = resp.json()
+        except Exception as exc:
+            st.error(f"Strava auth failed: {exc}")
+            st.query_params.clear()
+            return
+
+    athlete = token_data.get("athlete", {})
+    athlete_id = str(athlete.get("id", ""))
+    full_name  = f"{athlete.get('firstname', '')} {athlete.get('lastname', '')}".strip()
+    pic_url    = athlete.get("profile", "")
+
+    user_id = upsert_user(
+        strava_athlete_id   = int(athlete_id),
+        access_token        = token_data["access_token"],
+        refresh_token       = token_data["refresh_token"],
+        token_expires_at    = int(token_data["expires_at"]),
+        athlete_name        = full_name,
+        athlete_profile_pic = pic_url,
+    )
+
+    st.session_state["user_id"]             = user_id
+    st.session_state["athlete_name"]        = full_name
+    st.session_state["athlete_profile_pic"] = pic_url
+
+    st.query_params.clear()
+    st.rerun()
+
+
+def _render_login_page() -> None:
+    """Centered login page shown when no authenticated user is in session."""
+    _, mid, _ = st.columns([1, 2, 1])
+    with mid:
+        st.markdown("---")
+        st.markdown("# 🚴 Adaptive Training Coach")
+        st.markdown(
+            "AI-powered weekly training plans built from your Strava history. "
+            "Connect once and your activities, goals, and plans are always in sync."
+        )
+        st.markdown("---")
+        st.link_button(
+            "Connect with Strava",
+            url=_strava_oauth_url(),
+            type="primary",
+            use_container_width=True,
+        )
+        st.caption("Only *activity:read_all* scope is requested. No writing to Strava.")
+
+
+# ---------------------------------------------------------------------------
+# Auth gate → sidebar → route
+# ---------------------------------------------------------------------------
+
+# Step 1: Handle any incoming OAuth callback before rendering anything else
+_handle_oauth_callback()
+
+# Step 2: Require authentication
+_user_id = st.session_state.get("user_id")
+if not _user_id:
+    _render_login_page()
+    st.stop()
+
+# Step 3: Refresh Strava token if close to expiry
+try:
+    _access_token = refresh_strava_token(_user_id)
+    st.session_state["access_token"] = _access_token
+except Exception:
+    pass  # Non-fatal — existing token may still be valid for the session
+
+# Step 4: Initialise per-user session state
+_init_state(_user_id)
+
+# ---------------------------------------------------------------------------
 # Sidebar navigation
 # ---------------------------------------------------------------------------
 
@@ -652,10 +768,25 @@ with st.sidebar:
         label_visibility="collapsed",
     )
     st.divider()
-    # TODO Phase 6: Replace with Strava OAuth flow for multi-user support.
-    # For now, single-user mode reads STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET,
-    # and STRAVA_REFRESH_TOKEN from the .env file.
-    st.caption("🔒 Single-user · Strava via .env")
+
+    # TODO: Previously "Single-user · Strava via .env" — replaced by OAuth.
+    # The STRAVA_REFRESH_TOKEN in .env is no longer used for the app;
+    # tokens are now stored per-user in the Supabase users table.
+    _name = st.session_state.get("athlete_name", "Athlete")
+    _pic  = st.session_state.get("athlete_profile_pic", "")
+    if _pic:
+        c1, c2 = st.columns([1, 3])
+        with c1:
+            st.image(_pic, width=40)
+        with c2:
+            st.markdown(f"**{_name}**")
+    else:
+        st.markdown(f"👤 **{_name}**")
+
+    if st.button("Disconnect", use_container_width=True):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Route
