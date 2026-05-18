@@ -7,7 +7,7 @@ import anthropic
 import requests
 from dotenv import load_dotenv
 
-from db import athlete_metrics, get_activities
+from db import athlete_metrics, calculate_hr_zones, get_activities, get_goals, save_plan
 from vector_store import search_activities
 
 load_dotenv()
@@ -70,12 +70,13 @@ explaining every decision. Your job is to write the workout, not re-evaluate the
 conditions. Honor every pre-resolved decision; override only when there is a clear \
 athletic reason and explain it in the description.
 
-TIME-OF-DAY COMPLIANCE — MANDATORY:
-If a day's flags include a humidity or heat recommendation to shift time of day \
-(e.g. "consider shifting to morning", "consider starting earlier"), you MUST update \
-the time_of_day field in the JSON output to reflect that shift. Acknowledging the \
-flag only in the description while leaving time_of_day unchanged is a compliance \
-violation. The time_of_day field must match the action taken, not the original slot.
+TIME-OF-DAY RULE:
+The time_of_day field represents the athlete's stated availability window — preserve \
+it by default. Only change it when a rule engine flag has definitively re-routed the \
+session (e.g. "session falls outside sunrise/sunset — moved indoors"). Humidity and \
+heat advisories ("consider shifting to morning", "consider starting earlier") are \
+informational: acknowledge the concern in the description, recommend an early start \
+within the window, but do NOT change the time_of_day field.
 
 INTENSITY PROGRESSION — MANDATORY:
 Even in weeks where every session is short (≤60 min), intensity must still vary \
@@ -95,7 +96,18 @@ directly in the description. Example: "Yoga is prescribed here instead of the \
 default short-session Run because yesterday's 69 km ride triggered the active \
 recovery rule (Rule 10 override of Rule 6)." \
 Silently ignoring a lower-priority flag without acknowledging it in the description \
-is a compliance violation. Every flag that was not acted on must be accounted for.\
+is a compliance violation. Every flag that was not acted on must be accounted for.
+
+HR TARGETS:
+Always prescribe heart rate targets using zones (e.g. "Zone 2 effort", "upper Zone 3 \
+to low Zone 4") rather than absolute bpm values. Reference the athlete's zone \
+definitions provided in the constraints section. Never write absolute bpm numbers \
+as the primary target — zones only.
+
+DESCRIPTION LENGTH — MANDATORY:
+Each day's description must be 2-4 sentences maximum. Be specific and actionable \
+but concise — no preamble, no restating rule engine decisions, no explaining why \
+rules fired. Just tell the athlete what to do.\
 
 Always respond with valid JSON only — no markdown fences, no prose.\
 """
@@ -433,7 +445,18 @@ def _next_date_for_day(day_name: str) -> date:
     return today + timedelta(days=(WEEKDAY_MAP[day_name.lower()] - today.weekday()) % 7)
 
 
-def _format_resolved_schedule(resolved: dict) -> str:
+def _c_to_display(temp_c_str: str, units: str) -> str:
+    """Convert a '19°C' string to °F if units='imperial', else return unchanged."""
+    if units == "metric" or not temp_c_str or "°" not in str(temp_c_str):
+        return temp_c_str
+    try:
+        c = float(str(temp_c_str).replace("°C", "").strip())
+        return f"{c * 9 / 5 + 32:.0f}°F"
+    except (ValueError, AttributeError):
+        return temp_c_str
+
+
+def _format_resolved_schedule(resolved: dict, units: str = "metric") -> str:
     """
     Render the enriched schedule for the prompt.
     The model receives decisions, not raw numbers to reason about.
@@ -461,9 +484,11 @@ def _format_resolved_schedule(resolved: dict) -> str:
         else:
             lines.append("  Decisions: none — all conditions nominal")
         if w:
+            t_max = _c_to_display(w.get("temp_max", "?"), units)
+            t_min = _c_to_display(w.get("temp_min", "?"), units)
             lines.append(
                 f"  Weather: {w.get('conditions','?')}, "
-                f"{w.get('temp_max','?')}/{w.get('temp_min','?')}, "
+                f"{t_max}/{t_min}, "
                 f"wind {w.get('wind_mph','?')}mph, "
                 f"precip {w.get('precipitation_chance','?')}, "
                 f"humidity {w.get('humidity','n/a')}, "
@@ -476,32 +501,97 @@ def _format_resolved_schedule(resolved: dict) -> str:
 _JSON_CLOSING = "\nAlways respond with valid JSON only — no markdown fences, no prose."
 
 
-def _build_system_prompt(athlete_m: dict) -> str:
+def _build_system_prompt(athlete_m: dict, goals: dict | None = None) -> str:
     """
-    Return SYSTEM_PROMPT with concrete, athlete-specific HR ceilings injected
-    as a hard constraint section before the closing JSON instruction.
+    Return SYSTEM_PROMPT with athlete profile (goals) and HR ceilings injected
+    before the closing JSON instruction.
     """
+    extra = ""
+
+    # -- Athlete profile from persisted goals ---------------------------------
+    if goals:
+        profile_parts: list[str] = []
+
+        if goals.get("objective"):
+            profile_parts.append(f"Objective: {goals['objective']}")
+
+        prefs = goals.get("sport_preferences") or {}
+        pref_items = []
+        if prefs.get("primary_sport"):
+            pref_items.append(f"primary sport is {prefs['primary_sport']}")
+        if prefs.get("secondary_sport"):
+            pref_items.append(f"secondary is {prefs['secondary_sport']}")
+        if pref_items:
+            profile_parts.append("Sport preferences: " + ", ".join(pref_items) + ".")
+
+        if goals.get("physical_notes"):
+            profile_parts.append(
+                "PHYSICAL CONSTRAINTS (hard limits — never violate): "
+                + goals["physical_notes"]
+            )
+
+        future_events: list[str] = []
+        for ev in goals.get("upcoming_events") or []:
+            try:
+                ev_date = date.fromisoformat(str(ev["date"]))
+                days = (ev_date - date.today()).days
+                if days < 0:
+                    continue
+                if days <= 14:
+                    guidance = "final prep — taper and sharpen this week"
+                elif days <= 28:
+                    guidance = "peak build — race-specificity is a priority"
+                elif days <= 56:
+                    guidance = "build phase — support this event with progressive overload"
+                else:
+                    guidance = "long horizon — maintain general fitness"
+                line = f"  · {ev.get('name', 'Event')}"
+                if ev.get("sport"):
+                    line += f" ({ev['sport']})"
+                line += f" — {days} days away. {guidance}."
+                if ev.get("notes"):
+                    line += f" Notes: {ev['notes']}"
+                future_events.append(line)
+            except (ValueError, KeyError, TypeError):
+                pass
+
+        if future_events:
+            profile_parts.append("Upcoming events:\n" + "\n".join(future_events))
+
+        if profile_parts:
+            extra += "\n\nATHLETE PROFILE:\n" + "\n".join(profile_parts)
+
+    # -- Per-sport HR zones ---------------------------------------------------
     max_hr_by_sport = athlete_m.get("max_hr_by_sport", {})
-    cycling_max = max(
-        (v for k, v in max_hr_by_sport.items() if k in _CYCLING_TYPES),
-        default=None,
-    )
-    run_max = max_hr_by_sport.get("Run")
+    if max_hr_by_sport:
+        zones = calculate_hr_zones(max_hr_by_sport)
+        if zones:
+            # Prioritise primary sports; sort the rest alphabetically
+            priority = ["Run", "Ride", "VirtualRide"]
+            ordered = [s for s in priority if s in zones] + \
+                      [s for s in sorted(zones) if s not in priority]
+            zone_lines = []
+            for sport in ordered:
+                z = zones[sport]
+                zone_lines.append(
+                    f"  {sport}: "
+                    f"Z1 <{z['z1_ceiling']}bpm, "
+                    f"Z2 {z['z1_ceiling']}–{z['z2_ceiling']}bpm, "
+                    f"Z3 {z['z2_ceiling']}–{z['z3_ceiling']}bpm, "
+                    f"Z4 {z['z3_ceiling']}–{z['z4_ceiling']}bpm, "
+                    f"Z5 >{z['z4_ceiling']}bpm (max {z['max']}bpm)"
+                )
+            extra += (
+                "\n\nATHLETE HR ZONES:\n"
+                "Use these zone definitions. Prescribe 'Zone 2', 'Zone 3-4', etc. — "
+                "never absolute bpm as the primary target. "
+                "Zone 5 is race-intensity only; do not assign it in general training plans.\n"
+                + "\n".join(zone_lines)
+            )
 
-    if not cycling_max and not run_max:
+    if not extra:
         return SYSTEM_PROMPT
-
-    sentences = [
-        "HR targets must never exceed the athlete's recorded maximum HR for that sport."
-    ]
-    if run_max:
-        sentences.append(f"For running the max is {run_max:.0f}bpm.")
-    if cycling_max:
-        sentences.append(f"For cycling the max is {cycling_max:.0f}bpm.")
-    sentences.append("Prescribing targets above these values is a critical error.")
-
-    hr_block = "\n\nATHLETE HR CEILING — HARD LIMIT:\n" + " ".join(sentences)
-    return SYSTEM_PROMPT.replace(_JSON_CLOSING, hr_block + _JSON_CLOSING)
+    return SYSTEM_PROMPT.replace(_JSON_CLOSING, extra + _JSON_CLOSING)
 
 
 # ---------------------------------------------------------------------------
@@ -595,19 +685,25 @@ def validate_day(
                 "severity": "critical",
             })
 
-    # Check 3: HR target exceeds athlete's recorded max HR for this sport
+    # Check 3: absolute HR above Zone 4 ceiling without accompanying zone references.
+    # If the description uses zone language (e.g. "Zone 3"), bpm values are
+    # treated as supplementary context rather than primary targets — skip the check.
     if hr_values and sport_max_hr:
-        bad_hr = [h for h in hr_values if h > sport_max_hr]
-        if bad_hr:
-            violations.append({
-                "type": "hr_too_high",
-                "description": (
-                    f"Prescribed HR {', '.join(str(h) for h in bad_hr)}bpm "
-                    f"exceeds athlete's recorded max HR for {activity_type} "
-                    f"({sport_max_hr:.0f}bpm)"
-                ),
-                "severity": "critical",
-            })
+        z4_ceiling = int(sport_max_hr * 0.90)
+        has_zone_refs = bool(re.search(r'\bZone\s*[1-5]\b', description, re.IGNORECASE))
+        if not has_zone_refs:
+            bad_hr = [h for h in hr_values if h > z4_ceiling]
+            if bad_hr:
+                violations.append({
+                    "type": "hr_above_zone4",
+                    "description": (
+                        f"Absolute HR {', '.join(str(h) for h in bad_hr)}bpm "
+                        f"prescribed without zone references — exceeds Zone 4 ceiling "
+                        f"({z4_ceiling}bpm, 90% of {sport_max_hr:.0f}bpm max for {activity_type}). "
+                        "Use zone references (e.g. 'Zone 3-4') instead of absolute bpm targets."
+                    ),
+                    "severity": "critical",
+                })
 
     # Check 4: duration exceeds available window
     duration = day_plan.get("duration_minutes", 0)
@@ -739,7 +835,11 @@ def _fallback_fix_day(
     description = fixed.get("description", "")
     vtypes = {v["type"] for v in violations}
     max_watts = athlete_m.get("max_watts")
-    max_hr = athlete_m.get("max_hr")
+    activity_type = fixed.get("activity_type", "")
+    sport_max_hr = (
+        athlete_m.get("max_hr_by_sport", {}).get(activity_type)
+        or athlete_m.get("max_hr")
+    )
 
     if "invalid_wattage" in vtypes:
         description = re.sub(
@@ -762,16 +862,20 @@ def _fallback_fix_day(
             description,
         )
 
-    if "hr_too_high" in vtypes and max_hr:
-        cap_hr = int(max_hr * 0.95)
-
-        def _cap_hr(m: re.Match) -> str:
-            nums = [int(n) for n in re.findall(r'\d+', m.group(0).split('bpm')[0])]
-            return f"{cap_hr}bpm" if any(n > max_hr for n in nums) else m.group(0)
-
+    if ("hr_too_high" in vtypes or "hr_above_zone4" in vtypes) and sport_max_hr:
+        z4_ceiling = int(sport_max_hr * 0.90)
+        # Replace all absolute bpm targets with a zone-based placeholder
         description = re.sub(
             r'\d+(?:\s*[-–]\s*\d+)?\s*bpm\b',
-            _cap_hr,
+            f"Zone 3-4 effort (≤{z4_ceiling}bpm)",
+            description,
+            count=1,
+            flags=re.IGNORECASE,
+        )
+        # Strip any remaining bare bpm values
+        description = re.sub(
+            r'\d+(?:\s*[-–]\s*\d+)?\s*bpm\b',
+            "[see zone chart]",
             description,
             flags=re.IGNORECASE,
         )
@@ -789,6 +893,9 @@ def generate_plan(
     goal: str,
     location: tuple[float, float] = DEFAULT_LOCATION,
     recent_activities: list[dict] | None = None,
+    goals: dict | None = None,
+    units: str = "imperial",
+    on_token=None,
 ) -> dict:
     """
     Generate a structured weekly training plan.
@@ -798,6 +905,9 @@ def generate_plan(
         goal:               Natural language goal string
         location:           (lat, lon) — defaults to Tacoma, WA
         recent_activities:  Pre-fetched activity list; fetched if not provided
+        goals:              Persisted athlete profile from get_goals(); optional
+        units:              "imperial" or "metric" — controls temp display in prompt
+        on_token:           Optional callback(chars: int) called during streaming
     """
     if recent_activities is None:
         recent_activities = get_activities(days=90)
@@ -816,7 +926,7 @@ RECENT TRAINING LOAD (last 4 weeks):
 SIMILAR PAST WORKOUTS (for pacing and intensity reference):
 {_format_examples(examples)}
 
-{_format_resolved_schedule(resolved)}
+{_format_resolved_schedule(resolved, units=units)}
 
 Return a JSON object:
 {{
@@ -845,13 +955,24 @@ Return a JSON object:
 
     athlete_m = athlete_metrics(recent_activities)
     client = anthropic.Anthropic()
-    response = client.messages.create(
+    api_kwargs = dict(
         model=MODEL,
         max_tokens=2048,
-        system=[{"type": "text", "text": _build_system_prompt(athlete_m), "cache_control": {"type": "ephemeral"}}],
+        system=[{"type": "text", "text": _build_system_prompt(athlete_m, goals), "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user_message}],
     )
-    plan = parse_json_response(response.content[0].text)
+
+    if on_token is not None:
+        with client.messages.stream(**api_kwargs) as stream:
+            raw_text = ""
+            for chunk in stream.text_stream:
+                raw_text += chunk
+                on_token(len(raw_text))
+    else:
+        response = client.messages.create(**api_kwargs)
+        raw_text = response.content[0].text
+
+    plan = parse_json_response(raw_text)
 
     # -- Post-generation validation and repair --------------------------------
     days_repaired = 0
@@ -893,6 +1014,13 @@ Return a JSON object:
         "critical": len([v for v in all_violations if v["severity"] == "critical"]),
         "warnings": len([v for v in all_violations if v["severity"] == "warning"]),
     }
+
+    try:
+        plan_id = save_plan(schedule, goal, plan)
+        plan["plan_id"] = plan_id
+    except Exception as exc:
+        print(f"Warning: could not persist plan to database: {exc}")
+
     return plan
 
 
@@ -909,11 +1037,22 @@ def main() -> None:
     goal = "maintain fitness with a focus on cycling"
 
     recent_activities = get_activities(days=90)
+    goals = get_goals()
 
     print(f"Goal     : {goal}")
     print(f"Location : Tacoma, WA {DEFAULT_LOCATION}")
     print(f"Days     : {', '.join(schedule.keys())}")
-    print(f"History  : {len(recent_activities)} activities loaded\n")
+    print(f"History  : {len(recent_activities)} activities loaded")
+    if goals:
+        print(f"Objective: {goals.get('objective') or '(none)'}")
+        events = goals.get("upcoming_events") or []
+        for ev in events:
+            try:
+                days_until = (date.fromisoformat(str(ev["date"])) - date.today()).days
+                print(f"  Event  : {ev['name']} in {days_until}d")
+            except (ValueError, KeyError):
+                pass
+    print()
 
     # Show what the rule engine decided before calling the model
     forecast = get_weekly_forecast(*DEFAULT_LOCATION)
@@ -931,9 +1070,13 @@ def main() -> None:
     print()
 
     print("Generating plan...\n")
-    plan = generate_plan(schedule, goal, recent_activities=recent_activities)
+    plan = generate_plan(schedule, goal, recent_activities=recent_activities, goals=goals)
 
-    print(f"Week goal: {plan['week_goal']}\n")
+    print(f"Week goal: {plan['week_goal']}")
+    if plan.get("plan_id"):
+        print(f"Saved as plan #{plan['plan_id']}\n")
+    else:
+        print()
     for day in plan["days"]:
         w = day.get("weather", {})
         dist = f"~{day['distance_km']} km" if day.get("distance_km") else "no distance"

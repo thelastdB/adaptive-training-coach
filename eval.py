@@ -40,9 +40,15 @@ RUBRIC: dict[str, str] = {
     ),
     "intensity_progression": (
         "Is the intensity distribution sensible across the week? "
-        "Score 5 for a well-balanced distribution (mix of easy/moderate/hard, no back-to-back "
-        "hard days, adequate recovery). Score 1 if every session is the same intensity or hard "
-        "sessions are stacked consecutively without recovery."
+        "Intensity caps are CEILINGS, not targets — prescribing easy or moderate on a day "
+        "capped at hard is correct when recovery context justifies it (e.g. back-to-back "
+        "training days, post-hard-effort flag, first session after a gap). "
+        "Downgrading intensity below the cap is acceptable and encouraged when recovery "
+        "rules, consecutive training days, or post-hard-effort flags are present. "
+        "Penalize only when: (a) intensity exceeds its cap, or (b) hard sessions appear "
+        "back-to-back with no recovery rationale in the description. "
+        "Score 5 for a week with clear periodization logic; score 1 only if hard efforts "
+        "stack consecutively with zero recovery structure."
     ),
     "rule_compliance": (
         "Did the plan honor every pre-resolved decision from the rule engine? "
@@ -51,10 +57,18 @@ RUBRIC: dict[str, str] = {
         "Score 5 for perfect compliance; deduct 1 per clear violation."
     ),
     "data_grounded": (
-        "Are wattage, HR, and pace targets derived from the athlete's actual history rather "
-        "than generic textbook values? Score 5 if prescribed targets fall within the athlete's "
-        "demonstrated range; score 1 if numbers are implausibly high/low or obviously generic "
-        "(e.g. 200W for an athlete whose max recorded average is 135W)."
+        "Are training targets grounded in this athlete's actual data? Evaluate four things: "
+        "(1) HR prescription — does the plan use zone names (Zone 1-5) rather than raw bpm? "
+        "Do the zone bpm ranges cited match the athlete's actual per-sport max HR "
+        "(e.g. Run Z4 should end near 90% of the athlete's recorded run max HR)? "
+        "(2) Power — are wattage targets within the athlete's demonstrated range "
+        "(e.g. not prescribing 200W for a cyclist whose recorded average is 99-131W)? "
+        "(3) Pace — are run pace targets consistent with the athlete's demonstrated speed "
+        "(recorded ~10.4 km/h ≈ 5:46/km avg)? "
+        "(4) Zone usage — prescribing 'Zone 2 effort' without any bpm context is fine; "
+        "prescribing absolute bpm without any zone reference should be penalized. "
+        "Score 5 if zones are used correctly and power/pace targets match history; "
+        "score 1 if targets are clearly fabricated or contradict the athlete's data."
     ),
     "description_quality": (
         "Are workout descriptions specific, structured, and actionable? "
