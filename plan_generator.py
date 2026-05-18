@@ -1,4 +1,5 @@
 import json
+import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
@@ -6,12 +7,53 @@ import anthropic
 import requests
 from dotenv import load_dotenv
 
-from db import get_activities
+from db import athlete_metrics, get_activities
 from vector_store import search_activities
 
 load_dotenv()
 
 MODEL = "claude-sonnet-4-6"
+
+
+def parse_json_response(text: str) -> dict:
+    """
+    Robustly parse JSON from an LLM response.
+
+    Attempts in order:
+      1. Plain json.loads on the stripped text.
+      2. Strip markdown code fences (```json ... ``` or ``` ... ```).
+      3. Regex-extract the first {...} block and parse that.
+
+    Raises ValueError with a preview of the raw text if all attempts fail.
+    """
+    text = text.strip()
+
+    # Attempt 1 — clean response
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Attempt 2 — strip markdown code fences
+    fenced = re.sub(r'^```(?:json)?\s*', '', text, flags=re.IGNORECASE)
+    fenced = re.sub(r'\s*```$', '', fenced)
+    try:
+        return json.loads(fenced.strip())
+    except json.JSONDecodeError:
+        pass
+
+    # Attempt 3 — extract first {...} block
+    m = re.search(r'\{.*\}', text, re.DOTALL)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(
+        f"Could not parse JSON from model response. "
+        f"First 200 chars: {text[:200]!r}"
+    )
 DEFAULT_LOCATION = (47.2529, -122.4443)  # Tacoma, WA
 
 # time_of_day is preserved through every layer so weather rules can compare it
@@ -27,6 +69,33 @@ carries an indoor flag, a suggested activity type, an intensity cap, and flags \
 explaining every decision. Your job is to write the workout, not re-evaluate the \
 conditions. Honor every pre-resolved decision; override only when there is a clear \
 athletic reason and explain it in the description.
+
+TIME-OF-DAY COMPLIANCE — MANDATORY:
+If a day's flags include a humidity or heat recommendation to shift time of day \
+(e.g. "consider shifting to morning", "consider starting earlier"), you MUST update \
+the time_of_day field in the JSON output to reflect that shift. Acknowledging the \
+flag only in the description while leaving time_of_day unchanged is a compliance \
+violation. The time_of_day field must match the action taken, not the original slot.
+
+INTENSITY PROGRESSION — MANDATORY:
+Even in weeks where every session is short (≤60 min), intensity must still vary \
+across the week. At least one session must be easy or moderate — short duration \
+does not justify assigning hard intensity to every day. A week of all-hard sessions \
+provides no recovery stimulus and violates basic periodization. Distribute intensity \
+as you would for any other week: one quality session, one moderate session, \
+one recovery session.
+
+RULE OVERRIDE TRANSPARENCY — MANDATORY:
+When a day's flags list contains two rules that pull in different directions — for \
+example, one flag suggesting Run (Rule 6: ≤60 min) and another suggesting Yoga \
+(Rule 10: day after hard effort) — the winning rule takes priority and the \
+description field MUST explicitly name the conflict and explain the resolution. \
+State which rule was overridden, which rule won, and why. Use plain language \
+directly in the description. Example: "Yoga is prescribed here instead of the \
+default short-session Run because yesterday's 69 km ride triggered the active \
+recovery rule (Rule 10 override of Rule 6)." \
+Silently ignoring a lower-priority flag without acknowledging it in the description \
+is a compliance violation. Every flag that was not acted on must be accounted for.\
 
 Always respond with valid JSON only — no markdown fences, no prose.\
 """
@@ -404,6 +473,313 @@ def _format_resolved_schedule(resolved: dict) -> str:
     return "\n".join(lines)
 
 
+_JSON_CLOSING = "\nAlways respond with valid JSON only — no markdown fences, no prose."
+
+
+def _build_system_prompt(athlete_m: dict) -> str:
+    """
+    Return SYSTEM_PROMPT with concrete, athlete-specific HR ceilings injected
+    as a hard constraint section before the closing JSON instruction.
+    """
+    max_hr_by_sport = athlete_m.get("max_hr_by_sport", {})
+    cycling_max = max(
+        (v for k, v in max_hr_by_sport.items() if k in _CYCLING_TYPES),
+        default=None,
+    )
+    run_max = max_hr_by_sport.get("Run")
+
+    if not cycling_max and not run_max:
+        return SYSTEM_PROMPT
+
+    sentences = [
+        "HR targets must never exceed the athlete's recorded maximum HR for that sport."
+    ]
+    if run_max:
+        sentences.append(f"For running the max is {run_max:.0f}bpm.")
+    if cycling_max:
+        sentences.append(f"For cycling the max is {cycling_max:.0f}bpm.")
+    sentences.append("Prescribing targets above these values is a critical error.")
+
+    hr_block = "\n\nATHLETE HR CEILING — HARD LIMIT:\n" + " ".join(sentences)
+    return SYSTEM_PROMPT.replace(_JSON_CLOSING, hr_block + _JSON_CLOSING)
+
+
+# ---------------------------------------------------------------------------
+# Layer 1 — Deterministic validator
+# ---------------------------------------------------------------------------
+
+_CYCLING_TYPES = {"Ride", "VirtualRide"}
+
+_REPAIR_SYSTEM_PROMPT = (
+    "You are a training plan repair system. Fix exactly the violations listed. "
+    "Reproduce all unaffected fields verbatim. "
+    "Return valid JSON for a single day object — no markdown, no prose."
+)
+
+
+def _extract_watt_values(text: str) -> list[float]:
+    """Extract all wattage figures from text, including both ends of ranges."""
+    values: list[float] = []
+    for m in re.finditer(
+        r'(\d+(?:\.\d+)?)(?:\s*[-–]\s*(\d+(?:\.\d+)?))?\s*[Ww](?:atts?)?\b', text
+    ):
+        values.append(float(m.group(1)))
+        if m.group(2):
+            values.append(float(m.group(2)))
+    return values
+
+
+def _extract_hr_values(text: str) -> list[int]:
+    """Extract all heart-rate figures from text, including both ends of ranges."""
+    values: list[int] = []
+    for m in re.finditer(r'(\d+)(?:\s*[-–]\s*(\d+))?\s*bpm\b', text, re.IGNORECASE):
+        values.append(int(m.group(1)))
+        if m.group(2):
+            values.append(int(m.group(2)))
+    for m in re.finditer(r'(?:HR|heart rate)\s*:?\s*(\d+)', text, re.IGNORECASE):
+        values.append(int(m.group(1)))
+    return values
+
+
+def validate_day(
+    day_plan: dict,
+    available_minutes: int,
+    athlete_m: dict,
+) -> list[dict]:
+    """
+    Check a single day plan for rule violations.
+
+    Returns a list of dicts, each with:
+      type        – machine-readable violation name
+      description – human-readable explanation
+      severity    – "critical" | "warning"
+    """
+    violations: list[dict] = []
+    description = day_plan.get("description", "")
+    activity_type = day_plan.get("activity_type", "")
+    is_cycling = activity_type in _CYCLING_TYPES
+
+    watt_values = _extract_watt_values(description)
+    hr_values = _extract_hr_values(description)
+
+    max_watts = athlete_m.get("max_watts")
+    # Sport-specific HR ceiling; fall back to the global max if the sport has no data
+    sport_max_hr = (
+        athlete_m.get("max_hr_by_sport", {}).get(activity_type)
+        or athlete_m.get("max_hr")
+    )
+
+    # Check 1: wattage in description for a non-cycling activity
+    if watt_values and not is_cycling:
+        violations.append({
+            "type": "invalid_wattage",
+            "description": (
+                f"Wattage ({', '.join(f'{w:.0f}W' for w in watt_values)}) "
+                f"prescribed for {activity_type} — watts only apply to cycling"
+            ),
+            "severity": "critical",
+        })
+
+    # Check 2: wattage exceeds athlete max by >20%
+    if is_cycling and watt_values and max_watts:
+        threshold = max_watts * 1.20
+        bad = [w for w in watt_values if w > threshold]
+        if bad:
+            violations.append({
+                "type": "wattage_too_high",
+                "description": (
+                    f"Prescribed {', '.join(f'{w:.0f}W' for w in bad)} "
+                    f"exceeds athlete max {max_watts:.0f}W by >20% "
+                    f"(threshold {threshold:.0f}W)"
+                ),
+                "severity": "critical",
+            })
+
+    # Check 3: HR target exceeds athlete's recorded max HR for this sport
+    if hr_values and sport_max_hr:
+        bad_hr = [h for h in hr_values if h > sport_max_hr]
+        if bad_hr:
+            violations.append({
+                "type": "hr_too_high",
+                "description": (
+                    f"Prescribed HR {', '.join(str(h) for h in bad_hr)}bpm "
+                    f"exceeds athlete's recorded max HR for {activity_type} "
+                    f"({sport_max_hr:.0f}bpm)"
+                ),
+                "severity": "critical",
+            })
+
+    # Check 4: duration exceeds available window
+    duration = day_plan.get("duration_minutes", 0)
+    if duration > available_minutes:
+        violations.append({
+            "type": "duration_exceeded",
+            "description": (
+                f"Session {duration} min exceeds available {available_minutes} min"
+            ),
+            "severity": "critical",
+        })
+
+    # Check 5 (warning): indoor cycling watts suspiciously low
+    if is_cycling and day_plan.get("indoor") and watt_values:
+        avg_watts = athlete_m.get("avg_watts_by_sport", {}).get(activity_type)
+        if avg_watts:
+            low = [w for w in watt_values if w < avg_watts * 0.50]
+            if low:
+                violations.append({
+                    "type": "wattage_suspiciously_low",
+                    "description": (
+                        f"Indoor {activity_type} targets "
+                        f"{', '.join(f'{w:.0f}W' for w in low)} "
+                        f"are <50% of athlete avg {avg_watts:.0f}W"
+                    ),
+                    "severity": "warning",
+                })
+
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Layer 2 — Targeted LLM repair
+# ---------------------------------------------------------------------------
+
+def repair_day(
+    day_plan: dict,
+    violations: list[dict],
+    schedule_day: dict,
+    athlete_m: dict,
+    recent_activities: list[dict],
+) -> dict:
+    """
+    Ask Claude to regenerate one day, correcting only the listed violations.
+    Returns the day dict with repaired=True and repair_reason added.
+    """
+    violation_text = "\n".join(
+        f"  [{v['severity'].upper()}] {v['type']}: {v['description']}"
+        for v in violations
+    )
+
+    max_w = athlete_m.get("max_watts")
+    max_hr = athlete_m.get("max_hr")
+    watts_by_sport = athlete_m.get("avg_watts_by_sport", {})
+    hr_by_sport = athlete_m.get("avg_hr_by_sport", {})
+
+    metrics_block = "\n".join(filter(None, [
+        f"  Max cycling watts (average_watts): {max_w:.0f}W" if max_w else None,
+        "  Avg watts by sport: " + ", ".join(
+            f"{s} {w:.0f}W" for s, w in watts_by_sport.items()
+        ) if watts_by_sport else None,
+        f"  Absolute max HR recorded: {max_hr:.0f}bpm" if max_hr else None,
+        "  Avg HR by sport: " + ", ".join(
+            f"{s} {h:.0f}bpm" for s, h in hr_by_sport.items()
+        ) if hr_by_sport else None,
+    ]))
+
+    prompt = f"""\
+A training plan day has violations. Reproduce it exactly and fix ONLY the violations listed.
+Do not change activity_type, indoor, intensity, time_of_day, flags, or weather.
+Only correct duration_minutes and description.
+
+ORIGINAL DAY:
+{json.dumps(day_plan, indent=2)}
+
+VIOLATIONS TO FIX:
+{violation_text}
+
+ATHLETE METRICS — prescribed targets must stay within these ranges:
+{metrics_block}
+
+HARD CONSTRAINTS:
+  duration_minutes must be ≤ {schedule_day.get('minutes', 999)}
+  indoor: {str(day_plan.get('indoor', False)).lower()}
+
+Return a single JSON day object with keys:
+  day, activity_type, duration_minutes, distance_km, intensity,
+  time_of_day, description, indoor, flags, weather\
+"""
+
+    client = anthropic.Anthropic()
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=1024,
+        system=[{
+            "type": "text",
+            "text": _REPAIR_SYSTEM_PROMPT,
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": prompt}],
+    )
+    repaired = parse_json_response(response.content[0].text)
+    repaired["repaired"] = True
+    repaired["repair_reason"] = "; ".join(
+        v["description"] for v in violations if v["severity"] == "critical"
+    )
+    return repaired
+
+
+def _fallback_fix_day(
+    day_plan: dict,
+    violations: list[dict],
+    available_minutes: int,
+    athlete_m: dict,
+) -> dict:
+    """
+    Deterministic in-place fix when LLM repair still has critical violations.
+    Caps/strips bad values directly in the description text.
+    """
+    fixed = dict(day_plan)
+    fixed["fallback"] = True
+    fixed["fallback_reason"] = "; ".join(
+        v["description"] for v in violations if v["severity"] == "critical"
+    )
+
+    if fixed.get("duration_minutes", 0) > available_minutes:
+        fixed["duration_minutes"] = available_minutes
+
+    description = fixed.get("description", "")
+    vtypes = {v["type"] for v in violations}
+    max_watts = athlete_m.get("max_watts")
+    max_hr = athlete_m.get("max_hr")
+
+    if "invalid_wattage" in vtypes:
+        description = re.sub(
+            r'\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*[Ww](?:atts?)?\b',
+            "[effort target]",
+            description,
+        )
+
+    if "wattage_too_high" in vtypes and max_watts:
+        cap = int(max_watts * 0.90)
+        threshold = max_watts * 1.20
+
+        def _cap_watt(m: re.Match) -> str:
+            nums = [float(n) for n in re.findall(r'\d+(?:\.\d+)?', m.group(0))]
+            return f"{cap}W" if any(n > threshold for n in nums) else m.group(0)
+
+        description = re.sub(
+            r'\d+(?:\.\d+)?(?:\s*[-–]\s*\d+(?:\.\d+)?)?\s*[Ww](?:atts?)?\b',
+            _cap_watt,
+            description,
+        )
+
+    if "hr_too_high" in vtypes and max_hr:
+        cap_hr = int(max_hr * 0.95)
+
+        def _cap_hr(m: re.Match) -> str:
+            nums = [int(n) for n in re.findall(r'\d+', m.group(0).split('bpm')[0])]
+            return f"{cap_hr}bpm" if any(n > max_hr for n in nums) else m.group(0)
+
+        description = re.sub(
+            r'\d+(?:\s*[-–]\s*\d+)?\s*bpm\b',
+            _cap_hr,
+            description,
+            flags=re.IGNORECASE,
+        )
+
+    fixed["description"] = description
+    return fixed
+
+
 # ---------------------------------------------------------------------------
 # Core plan generator
 # ---------------------------------------------------------------------------
@@ -467,14 +843,57 @@ Return a JSON object:
 }}\
 """
 
+    athlete_m = athlete_metrics(recent_activities)
     client = anthropic.Anthropic()
     response = client.messages.create(
         model=MODEL,
         max_tokens=2048,
-        system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+        system=[{"type": "text", "text": _build_system_prompt(athlete_m), "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user_message}],
     )
-    return json.loads(response.content[0].text.strip())
+    plan = parse_json_response(response.content[0].text)
+
+    # -- Post-generation validation and repair --------------------------------
+    days_repaired = 0
+    days_fallback = 0
+    all_violations: list[dict] = []
+
+    repaired_days = []
+    for day in plan.get("days", []):
+        day_name = day.get("day", "").lower()
+        sched_day = schedule.get(day_name, {})
+        available = sched_day.get("minutes", 9999)
+
+        violations = validate_day(day, available, athlete_m)
+        all_violations.extend(violations)
+        critical = [v for v in violations if v["severity"] == "critical"]
+
+        if critical:
+            repaired = repair_day(day, critical, sched_day, athlete_m, recent_activities)
+            re_violations = validate_day(repaired, available, athlete_m)
+            re_critical = [v for v in re_violations if v["severity"] == "critical"]
+
+            if re_critical:
+                repaired = _fallback_fix_day(repaired, re_critical, available, athlete_m)
+                days_fallback += 1
+            else:
+                days_repaired += 1
+
+            repaired_days.append(repaired)
+        else:
+            repaired_days.append(day)
+
+    plan["days"] = repaired_days
+    plan["validation_summary"] = {
+        "total_days": len(repaired_days),
+        "days_clean": len(repaired_days) - days_repaired - days_fallback,
+        "days_repaired": days_repaired,
+        "days_fallback": days_fallback,
+        "violations_found": len(all_violations),
+        "critical": len([v for v in all_violations if v["severity"] == "critical"]),
+        "warnings": len([v for v in all_violations if v["severity"] == "warning"]),
+    }
+    return plan
 
 
 # ---------------------------------------------------------------------------

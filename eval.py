@@ -8,21 +8,20 @@ run_eval_suite()    — Runs multiple plans from a predefined test set, prints a
 """
 
 import json
-import os
 import statistics
-from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
 from dotenv import load_dotenv
 
-from db import get_activities
+from db import athlete_metrics, get_activities
 from plan_generator import (
     DEFAULT_LOCATION,
     WEEKDAY_MAP,
     generate_plan,
     get_weekly_forecast,
+    parse_json_response,
     resolve_training_conditions,
 )
 
@@ -137,46 +136,8 @@ TEST_SCENARIOS = [
 # ---------------------------------------------------------------------------
 
 def _athlete_metric_summary(activities: list[dict]) -> str:
-    """
-    Compute per-sport mean ± range for watts, HR, and pace/speed from recent
-    activities. Passed to the evaluator so it can assess data_grounded.
-    """
-    sport_watts: dict[str, list] = defaultdict(list)
-    sport_hr: dict[str, list] = defaultdict(list)
-    sport_speed: dict[str, list] = defaultdict(list)
-
-    for act in activities:
-        sport = act["activity_type"]
-        if act.get("average_watts"):
-            sport_watts[sport].append(act["average_watts"])
-        if act.get("average_heartrate"):
-            sport_hr[sport].append(act["average_heartrate"])
-        if act.get("average_speed"):
-            sport_speed[sport].append(act["average_speed"])  # km/h
-
-    all_sports = sorted(
-        set(sport_watts) | set(sport_hr) | set(sport_speed)
-    )
-    lines = []
-    for sport in all_sports:
-        parts = []
-        if sport_watts[sport]:
-            w = sport_watts[sport]
-            parts.append(f"power {min(w):.0f}–{max(w):.0f}W (avg {statistics.mean(w):.0f}W)")
-        if sport_hr[sport]:
-            h = sport_hr[sport]
-            parts.append(f"HR {min(h):.0f}–{max(h):.0f} bpm (avg {statistics.mean(h):.0f})")
-        if sport_speed[sport]:
-            s = sport_speed[sport]
-            avg_pace = 60 / statistics.mean(s)  # min/km
-            parts.append(
-                f"speed {statistics.mean(s):.1f} km/h avg "
-                f"(~{int(avg_pace)}:{round((avg_pace % 1) * 60):02d}/km pace)"
-            )
-        if parts:
-            lines.append(f"  {sport}: " + ", ".join(parts))
-
-    return "\n".join(lines) if lines else "  No detailed metrics available."
+    """Thin wrapper — delegates to db.athlete_metrics for the formatted string."""
+    return athlete_metrics(activities)["summary_text"]
 
 
 def _format_resolved_for_eval(resolved: dict) -> str:
@@ -265,8 +226,8 @@ Return JSON with exactly this structure — one entry per rubric key, plus nothi
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = response.content[0].text.strip()
-    scores = json.loads(raw)
+    raw = response.content[0].text
+    scores = parse_json_response(raw)
 
     individual = [v["score"] for v in scores.values() if isinstance(v, dict)]
     scores["overall"] = round(statistics.mean(individual), 2) if individual else 0.0
@@ -361,11 +322,15 @@ def run_eval_suite(n: int = 5) -> list[dict]:
         resolved = resolve_training_conditions(
             scenario["schedule"], forecast, recent_activities
         )
-        plan = generate_plan(
-            scenario["schedule"],
-            scenario["goal"],
-            recent_activities=recent_activities,
-        )
+        try:
+            plan = generate_plan(
+                scenario["schedule"],
+                scenario["goal"],
+                recent_activities=recent_activities,
+            )
+        except ValueError as exc:
+            print(f"       SKIP — JSON parse error: {exc}")
+            continue
 
         print(f"       Scoring …")
         scores = score_plan(plan, scenario["schedule"], recent_activities, resolved)

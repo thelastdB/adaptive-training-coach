@@ -1,3 +1,5 @@
+import statistics
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import Column, Date, Float, Integer, String, create_engine, inspect, text
@@ -70,6 +72,75 @@ def save_activities(activities: list[dict]) -> int:
                 setattr(obj, key, value)
         session.commit()
     return len(activities)
+
+
+def athlete_metrics(activities: list[dict]) -> dict:
+    """
+    Compute per-sport power/HR/pace statistics for validation and evaluation.
+
+    Returns a dict with:
+      max_watts          – max average_watts across cycling activities (Ride, VirtualRide)
+      avg_watts_by_sport – mean average_watts keyed by sport
+      max_hr             – max max_heartrate across all activities
+      avg_hr_by_sport    – mean average_heartrate keyed by sport
+      summary_text       – preformatted string for LLM prompts
+    """
+    sport_watts: dict[str, list] = defaultdict(list)
+    sport_hr: dict[str, list] = defaultdict(list)
+    sport_max_hr: dict[str, list] = defaultdict(list)
+    sport_speed: dict[str, list] = defaultdict(list)
+    all_max_hr: list[float] = []
+
+    for act in activities:
+        sport = act["activity_type"]
+        if act.get("average_watts"):
+            sport_watts[sport].append(act["average_watts"])
+        if act.get("average_heartrate"):
+            sport_hr[sport].append(act["average_heartrate"])
+        if act.get("average_speed"):
+            sport_speed[sport].append(act["average_speed"])
+        if act.get("max_heartrate"):
+            all_max_hr.append(act["max_heartrate"])
+            sport_max_hr[sport].append(act["max_heartrate"])
+
+    cycling_watts = [
+        w for sport in ("Ride", "VirtualRide") for w in sport_watts.get(sport, [])
+    ]
+
+    all_sports = sorted(set(sport_watts) | set(sport_hr) | set(sport_speed))
+    lines = []
+    for sport in all_sports:
+        parts = []
+        if sport_watts[sport]:
+            w = sport_watts[sport]
+            parts.append(f"power {min(w):.0f}–{max(w):.0f}W (avg {statistics.mean(w):.0f}W)")
+        if sport_hr[sport]:
+            h = sport_hr[sport]
+            parts.append(f"HR {min(h):.0f}–{max(h):.0f} bpm (avg {statistics.mean(h):.0f})")
+        if sport_speed[sport]:
+            s = sport_speed[sport]
+            avg_pace = 60 / statistics.mean(s)
+            parts.append(
+                f"speed {statistics.mean(s):.1f} km/h "
+                f"(~{int(avg_pace)}:{round((avg_pace % 1) * 60):02d}/km)"
+            )
+        if parts:
+            lines.append(f"  {sport}: " + ", ".join(parts))
+
+    return {
+        "max_watts": max(cycling_watts) if cycling_watts else None,
+        "avg_watts_by_sport": {
+            sport: statistics.mean(vals) for sport, vals in sport_watts.items() if vals
+        },
+        "max_hr": max(all_max_hr) if all_max_hr else None,
+        "max_hr_by_sport": {
+            sport: max(vals) for sport, vals in sport_max_hr.items() if vals
+        },
+        "avg_hr_by_sport": {
+            sport: statistics.mean(vals) for sport, vals in sport_hr.items() if vals
+        },
+        "summary_text": "\n".join(lines) if lines else "  No detailed metrics available.",
+    }
 
 
 def get_activities(days: int | None = 90) -> list[dict]:
