@@ -15,7 +15,7 @@ from pathlib import Path
 import anthropic
 from dotenv import load_dotenv
 
-from db import athlete_metrics, get_activities
+from db_supabase import athlete_metrics, get_activities
 from plan_generator import (
     DEFAULT_LOCATION,
     WEEKDAY_MAP,

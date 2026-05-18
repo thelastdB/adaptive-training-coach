@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 
-from db import (
+from db_supabase import (
     athlete_metrics,
     get_activities,
     get_goals,
@@ -21,6 +21,7 @@ from db import (
     get_plans,
     rate_plan,
     save_goals,
+    setup_schema,
 )
 from plan_generator import (
     MODEL,
@@ -28,8 +29,29 @@ from plan_generator import (
     generate_plan,
     parse_json_response,
 )
+from vector_store_supabase import setup_embeddings_table
 
 load_dotenv()
+
+
+def _setup_supabase() -> None:
+    """
+    Ensure all Supabase tables and the pgvector extension exist on first run.
+    Errors are logged as warnings rather than crashing the app — the app can
+    still load historical data from session state if setup fails transiently.
+    """
+    import warnings
+    try:
+        setup_schema()
+    except Exception as exc:
+        warnings.warn(f"Supabase schema setup failed: {exc}")
+    try:
+        setup_embeddings_table()
+    except Exception as exc:
+        warnings.warn(f"pgvector setup failed (non-fatal): {exc}")
+
+
+_setup_supabase()
 
 # ---------------------------------------------------------------------------
 # Constants

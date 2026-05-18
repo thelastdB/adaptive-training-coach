@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from stravalib import Client
 
-from db import save_activities
+from db_supabase import save_activities
 
 logging.getLogger("stravalib").setLevel(logging.ERROR)
 

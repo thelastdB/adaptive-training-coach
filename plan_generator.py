@@ -8,8 +8,8 @@ import anthropic
 import requests
 from dotenv import load_dotenv
 
-from db import athlete_metrics, calculate_hr_zones, get_activities, get_goals, save_plan
-from vector_store import search_activities
+from db_supabase import athlete_metrics, calculate_hr_zones, get_activities, get_goals, save_plan
+from vector_store_supabase import search_activities
 
 load_dotenv()
 
