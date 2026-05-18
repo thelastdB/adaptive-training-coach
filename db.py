@@ -40,16 +40,14 @@ def save_activities(activities: list[dict]) -> int:
     return len(activities)
 
 
-def get_activities(days: int = 90) -> list[dict]:
-    """Return activities from the last N days as a list of dicts."""
-    since = (datetime.now(tz=timezone.utc) - timedelta(days=days)).date()
+def get_activities(days: int | None = 90) -> list[dict]:
+    """Return activities from the last N days as a list of dicts. Pass days=None for all."""
     with Session(engine) as session:
-        rows = (
-            session.query(Activity)
-            .filter(Activity.date >= since)
-            .order_by(Activity.date.desc())
-            .all()
-        )
+        q = session.query(Activity)
+        if days is not None:
+            since = (datetime.now(tz=timezone.utc) - timedelta(days=days)).date()
+            q = q.filter(Activity.date >= since)
+        rows = q.order_by(Activity.date.desc()).all()
         return [
             {
                 "strava_id": r.strava_id,

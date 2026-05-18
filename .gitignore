@@ -10,3 +10,4 @@ wheels/
 .venv
 .env
 training.db
+faiss_store/
