@@ -255,7 +255,7 @@ def _render_day_card(
 
 def _render_last_week_summary() -> None:
     user_id = st.session_state.get("user_id", "local")
-    with st.expander("📊 Last week's training", expanded=False):
+    with st.expander("📊 Last week's training", expanded=True):
         acts = _load_last_week(user_id)
         if not acts:
             st.caption("No activities in the past 7 days.")
@@ -664,13 +664,17 @@ def _strava_oauth_url() -> str:
 
 def _handle_oauth_callback() -> None:
     """
-    If Strava has redirected back with ?code=..., exchange it for tokens,
-    store the user in Supabase, populate session_state, then rerun cleanly.
+    If Strava has redirected back with ?code=...:
+      1. Exchange the code for tokens.
+      2. Upsert the user in Supabase and populate session_state.
+      3. Fetch + store the last 90 days of Strava activities.
+      4. Build the pgvector embeddings so the new user is immediately searchable.
     """
     code = st.query_params.get("code")
     if not code:
         return
 
+    # ── Step 1: token exchange ────────────────────────────────────────────────
     with st.spinner("Connecting to Strava…"):
         try:
             resp = requests.post(
@@ -690,14 +694,16 @@ def _handle_oauth_callback() -> None:
             st.query_params.clear()
             return
 
-    athlete = token_data.get("athlete", {})
-    athlete_id = str(athlete.get("id", ""))
-    full_name  = f"{athlete.get('firstname', '')} {athlete.get('lastname', '')}".strip()
-    pic_url    = athlete.get("profile", "")
+    athlete      = token_data.get("athlete", {})
+    athlete_id   = str(athlete.get("id", ""))
+    full_name    = f"{athlete.get('firstname', '')} {athlete.get('lastname', '')}".strip()
+    pic_url      = athlete.get("profile", "")
+    access_token = token_data["access_token"]
 
+    # ── Step 2: persist user ──────────────────────────────────────────────────
     user_id = upsert_user(
         strava_athlete_id   = int(athlete_id),
-        access_token        = token_data["access_token"],
+        access_token        = access_token,
         refresh_token       = token_data["refresh_token"],
         token_expires_at    = int(token_data["expires_at"]),
         athlete_name        = full_name,
@@ -707,6 +713,34 @@ def _handle_oauth_callback() -> None:
     st.session_state["user_id"]             = user_id
     st.session_state["athlete_name"]        = full_name
     st.session_state["athlete_profile_pic"] = pic_url
+
+    # ── Step 3: sync activities ───────────────────────────────────────────────
+    from strava_fetch import fetch_and_save_activities
+    from vector_store_supabase import embed_activities
+
+    with st.spinner("Syncing your Strava activities…"):
+        try:
+            n_saved = fetch_and_save_activities(
+                user_id=user_id,
+                access_token=access_token,
+                days=90,
+                verbose=False,
+            )
+        except Exception as exc:
+            st.warning(f"Activity sync failed (you can retry later): {exc}")
+            n_saved = 0
+
+    # ── Step 4: build embeddings ──────────────────────────────────────────────
+    if n_saved > 0:
+        try:
+            embed_activities(user_id=user_id)
+        except Exception:
+            pass  # Non-fatal — search falls back to sequential scan
+
+    if n_saved > 0:
+        st.success(f"Connected! Synced {n_saved} activities from your Strava account.")
+        import time as _time
+        _time.sleep(1.5)  # let the user read the message before rerun
 
     st.query_params.clear()
     st.rerun()
