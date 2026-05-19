@@ -38,18 +38,35 @@ def fetch_and_save_activities(
     user_id: str,
     access_token: str,
     days: int = 90,
+    since_date=None,
     verbose: bool = False,
 ) -> int:
     """
-    Fetch the last `days` days of activities from Strava using the provided
-    access_token and upsert them into Supabase under user_id.
+    Fetch Strava activities and upsert them into Supabase under user_id.
+
+    Args:
+        user_id:      DB user identifier.
+        access_token: Valid Strava access token.
+        days:         How many days back to fetch when since_date is not given.
+        since_date:   Optional datetime or date — if provided, only fetch
+                      activities after this point (ignores days). Useful for
+                      incremental syncs; pass the most-recent stored activity date.
+        verbose:      Print a summary table to stdout.
 
     Returns the number of activities saved.
     """
     client = Client()
     client.access_token = access_token
 
-    since = datetime.now(tz=timezone.utc) - timedelta(days=days)
+    if since_date is not None:
+        # Ensure it's a timezone-aware datetime
+        if hasattr(since_date, "hour"):          # datetime
+            since = since_date if since_date.tzinfo else since_date.replace(tzinfo=timezone.utc)
+        else:                                    # date — promote to midnight UTC
+            since = datetime(since_date.year, since_date.month, since_date.day, tzinfo=timezone.utc)
+    else:
+        since = datetime.now(tz=timezone.utc) - timedelta(days=days)
+
     activities = client.get_activities(after=since)
 
     if verbose:

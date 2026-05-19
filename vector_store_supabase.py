@@ -237,9 +237,19 @@ def search_activities(query: str, user_id: str = "local", n: int = 5) -> list[di
     """
     Return the n activities most similar to `query` using cosine similarity.
 
-    Uses pgvector's <=> (cosine distance) operator.
-    score = 1 - cosine_distance, so higher is more similar.
+    Returns an empty list if no embeddings exist for the user rather than
+    raising an error, so plan generation degrades gracefully for new users.
     """
+    # Check whether any embeddings exist for this user before calling OpenAI
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM activity_embeddings WHERE user_id = %s LIMIT 1",
+                (user_id,),
+            )
+            if cur.fetchone() is None:
+                return []
+
     response = _openai.embeddings.create(model=EMBED_MODEL, input=[query])
     q_vec = _vec_to_pg(response.data[0].embedding)
 

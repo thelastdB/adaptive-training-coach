@@ -915,14 +915,27 @@ def generate_plan(
     if recent_activities is None:
         recent_activities = get_activities(days=90, user_id=user_id)
 
-    training_load = _training_load_summary(recent_activities)
-    examples = search_activities(goal, n=5)
+    no_history = len(recent_activities) == 0
+
+    training_load = (
+        _training_load_summary(recent_activities)
+        if not no_history
+        else "No training history available yet — plan based on schedule and goals only."
+    )
+    examples = search_activities(goal, n=5)   # returns [] safely when no embeddings
     forecast = get_weekly_forecast(*location)
     resolved = resolve_training_conditions(schedule, forecast, recent_activities)
 
+    history_note = (
+        "\nNOTE: This athlete has no recorded training history. "
+        "Generate a conservative, beginner-friendly plan. "
+        "Do not reference past wattage, HR, or pace — use effort zones only.\n"
+        if no_history else ""
+    )
+
     user_message = f"""\
 GOAL: {goal}
-
+{history_note}
 RECENT TRAINING LOAD (last 4 weeks):
 {training_load}
 
@@ -1045,12 +1058,47 @@ _SPORT_LABEL_TO_TYPES: dict[str, set[str]] = {
 }
 
 
+_NO_HISTORY_MSG = "No training history available yet"
+
+
 def _compute_assessment_signals(
     plan: dict,
     recent_activities: list[dict],
     goals: dict | None,
 ) -> dict:
     """Deterministic layer: compute RED/YELLOW/GREEN per criterion."""
+    # Short-circuit: if there's no history, skip volume and progression
+    if not recent_activities:
+        signals: dict[str, dict] = {
+            "volume": {
+                "signal": "YELLOW",
+                "planned_minutes": sum(
+                    d.get("duration_minutes", 0) for d in plan.get("days", [])
+                ),
+                "avg_weekly_minutes": 0,
+                "delta_pct": 0,
+                "no_history": True,
+            },
+            "sport_balance": {
+                "signal": "YELLOW",
+                "primary_sport": (goals or {}).get("sport_preferences", {}).get("primary_sport", "unset"),
+                "primary_minutes": 0,
+                "total_minutes": 0,
+                "primary_pct": 0,
+                "no_history": True,
+            },
+            "progression": {
+                "signal": "YELLOW",
+                "planned_minutes": sum(
+                    d.get("duration_minutes", 0) for d in plan.get("days", [])
+                ),
+                "last_week_minutes": 0,
+                "delta_pct": 0,
+                "no_history": True,
+            },
+        }
+        return signals
+
     today = datetime.now(tz=timezone.utc).date()
     planned_days = plan.get("days", [])
     planned_minutes = sum(d.get("duration_minutes", 0) for d in planned_days)
@@ -1199,21 +1247,31 @@ def _enrich_signals_with_llm(signals: dict, plan: dict, goals: dict | None) -> d
     context_lines = []
     for key, data in signals.items():
         sig = data["signal"]
+        no_hist = data.get("no_history", False)
         if key == "volume":
-            context_lines.append(
-                f"Volume [{sig}]: {data['planned_minutes']}min planned vs "
-                f"{data['avg_weekly_minutes']}min 4-week avg ({data['delta_pct']}% delta)"
-            )
+            if no_hist:
+                context_lines.append(f"Volume [{sig}]: {_NO_HISTORY_MSG}")
+            else:
+                context_lines.append(
+                    f"Volume [{sig}]: {data['planned_minutes']}min planned vs "
+                    f"{data['avg_weekly_minutes']}min 4-week avg ({data['delta_pct']}% delta)"
+                )
         elif key == "sport_balance":
-            context_lines.append(
-                f"Sport balance [{sig}]: {data['primary_pct']}% of planned time "
-                f"in primary sport ({data['primary_sport']})"
-            )
+            if no_hist:
+                context_lines.append(f"Sport balance [{sig}]: {_NO_HISTORY_MSG}")
+            else:
+                context_lines.append(
+                    f"Sport balance [{sig}]: {data['primary_pct']}% of planned time "
+                    f"in primary sport ({data['primary_sport']})"
+                )
         elif key == "progression":
-            context_lines.append(
-                f"Progression [{sig}]: {data['planned_minutes']}min planned vs "
-                f"{data['last_week_minutes']}min last week ({data['delta_pct']}% change)"
-            )
+            if no_hist:
+                context_lines.append(f"Progression [{sig}]: {_NO_HISTORY_MSG}")
+            else:
+                context_lines.append(
+                    f"Progression [{sig}]: {data['planned_minutes']}min planned vs "
+                    f"{data['last_week_minutes']}min last week ({data['delta_pct']}% change)"
+                )
         elif key == "event_readiness":
             phase_label = PHASE_LABELS.get(data["phase"], data["phase"])
             context_lines.append(

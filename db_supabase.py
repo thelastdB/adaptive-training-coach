@@ -352,6 +352,37 @@ def save_activities(activities: list[dict], user_id: str = "local") -> int:
     return len(activities)
 
 
+def delete_user_data(user_id: str) -> None:
+    """
+    Permanently delete all data for a user, in dependency order:
+      activity_embeddings → activities → goals → plans → users
+
+    The users row is matched on strava_athlete_id = int(user_id) since
+    user_id is stored as str(strava_athlete_id).
+    """
+    with _conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM activity_embeddings WHERE user_id = %s", (user_id,)
+            )
+            cur.execute(
+                "DELETE FROM activities WHERE user_id = %s", (user_id,)
+            )
+            cur.execute(
+                "DELETE FROM goals WHERE user_id = %s", (user_id,)
+            )
+            cur.execute(
+                "DELETE FROM plans WHERE user_id = %s", (user_id,)
+            )
+            try:
+                cur.execute(
+                    "DELETE FROM users WHERE strava_athlete_id = %s", (int(user_id),)
+                )
+            except (ValueError, psycopg2.Error):
+                # user_id may be 'local' or non-numeric in test/dev contexts
+                pass
+
+
 def get_activities(days: int | None = 90, user_id: str = "local") -> list[dict]:
     """
     Return activities for a user from the last N days.
@@ -423,8 +454,22 @@ def save_goals(goals_dict: dict, user_id: str = "local") -> None:
             )
 
 
-def get_goals(user_id: str = "local") -> dict | None:
-    """Return the goals profile for a user, or None if not set."""
+_EMPTY_GOALS: dict = {
+    "objective":         "",
+    "upcoming_events":   [],
+    "sport_preferences": {},
+    "physical_notes":    "",
+    "units":             "imperial",
+    "updated_at":        None,
+}
+
+
+def get_goals(user_id: str = "local") -> dict:
+    """
+    Return the goals profile for a user.
+    Returns a default empty goals dict (never None) when no row exists yet,
+    so callers can safely call .get() on the result without None-checks.
+    """
     with _conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
@@ -434,19 +479,19 @@ def get_goals(user_id: str = "local") -> dict | None:
             row = cur.fetchone()
 
     if row is None:
-        return None
+        return dict(_EMPTY_GOALS)
 
     # JSONB columns come back as Python dicts/lists from psycopg2
     events = row["upcoming_events"]
     prefs = row["sport_preferences"]
     return {
-        "user_id":          row["user_id"],
-        "objective":        row["objective"] or "",
-        "upcoming_events":  events if isinstance(events, list) else json.loads(events or "[]"),
+        "user_id":           user_id,
+        "objective":         row["objective"] or "",
+        "upcoming_events":   events if isinstance(events, list) else json.loads(events or "[]"),
         "sport_preferences": prefs if isinstance(prefs, dict) else json.loads(prefs or "{}"),
-        "physical_notes":   row["physical_notes"] or "",
-        "units":            row["units"] or "imperial",
-        "updated_at":       row["updated_at"].isoformat() if row["updated_at"] else None,
+        "physical_notes":    row["physical_notes"] or "",
+        "units":             row["units"] or "imperial",
+        "updated_at":        row["updated_at"].isoformat() if row["updated_at"] else None,
     }
 
 

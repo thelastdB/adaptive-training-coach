@@ -353,6 +353,23 @@ def render_weekly_plan() -> None:
 
     recent_acts, athlete_m = _load_data(user_id, days=90)
 
+    if not recent_acts:
+        st.info(
+            "No activities found. Make sure you have activities recorded on Strava "
+            "and try syncing."
+        )
+        tok = st.session_state.get("access_token", "")
+        if tok and st.button("🔄 Sync Strava now", type="primary"):
+            from strava_fetch import fetch_and_save_activities
+            from vector_store_supabase import embed_activities
+            with st.spinner("Syncing…"):
+                n = fetch_and_save_activities(user_id=user_id, access_token=tok, days=90)
+                if n > 0:
+                    embed_activities(user_id=user_id)
+                    st.cache_data.clear()
+            st.rerun()
+        return
+
     left, right = st.columns([1, 2], gap="large")
 
     # ── Left: schedule builder ──────────────────────────────────────────────
@@ -647,6 +664,27 @@ def render_profile() -> None:
             else:
                 st.warning("Event name is required.")
 
+    # ── Danger zone: account deletion ─────────────────────────────────────────
+    st.divider()
+    st.subheader("⚠️ Danger zone")
+    st.warning(
+        "Deleting your account permanently removes all your activities, goals, plans, "
+        "and embeddings from our database. This cannot be undone."
+    )
+    confirmed = st.checkbox("I understand this is permanent and cannot be undone")
+    if st.button(
+        "Permanently delete my account and all data",
+        type="primary",
+        disabled=not confirmed,
+    ):
+        from db_supabase import delete_user_data
+        with st.spinner("Deleting your data…"):
+            delete_user_data(user_id)
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+
 # ---------------------------------------------------------------------------
 # OAuth helpers
 # ---------------------------------------------------------------------------
@@ -746,6 +784,53 @@ def _handle_oauth_callback() -> None:
     st.rerun()
 
 
+def _sync_activities_if_stale(user_id: str, access_token: str) -> None:
+    """
+    Background sync: if the most recent stored activity is more than 24 hours
+    old (or no activities exist at all), fetch new activities incrementally and
+    rebuild embeddings. Shows only a toast — never blocks the UI.
+
+    Guards against repeated triggers within the same Streamlit session via
+    st.session_state["last_synced_at"].
+    """
+    from datetime import datetime, timezone, timedelta
+    from strava_fetch import fetch_and_save_activities
+    from vector_store_supabase import embed_activities
+
+    if st.session_state.get("last_synced_at"):
+        return  # already ran this session
+
+    try:
+        acts = get_activities(days=None, user_id=user_id)
+        if acts:
+            most_recent = max(a["date"] for a in acts)
+            cutoff = (datetime.now(tz=timezone.utc) - timedelta(hours=24)).date()
+            if most_recent >= cutoff:
+                # Data is fresh — mark synced so we don't check again this session
+                st.session_state["last_synced_at"] = datetime.now(tz=timezone.utc).isoformat()
+                return
+            since_date = most_recent  # incremental: only fetch what's new
+        else:
+            since_date = None  # no data at all — full 90-day fetch
+
+        st.toast("Syncing latest activities…")
+
+        n = fetch_and_save_activities(
+            user_id=user_id,
+            access_token=access_token,
+            days=90,
+            since_date=since_date,
+        )
+        if n > 0:
+            embed_activities(user_id=user_id)
+            st.cache_data.clear()
+
+        st.session_state["last_synced_at"] = datetime.now(tz=timezone.utc).isoformat()
+
+    except Exception:
+        pass  # sync failure must never block the app from loading
+
+
 def _render_login_page() -> None:
     """Centered login page shown when no authenticated user is in session."""
     _, mid, _ = st.columns([1, 2, 1])
@@ -784,10 +869,13 @@ try:
     _access_token = refresh_strava_token(_user_id)
     st.session_state["access_token"] = _access_token
 except Exception:
-    pass  # Non-fatal — existing token may still be valid for the session
+    _access_token = st.session_state.get("access_token", "")
 
 # Step 4: Initialise per-user session state
 _init_state(_user_id)
+
+# Step 5: Background sync — runs at most once per session, never blocks load
+_sync_activities_if_stale(_user_id, _access_token)
 
 # ---------------------------------------------------------------------------
 # Sidebar navigation
@@ -816,6 +904,27 @@ with st.sidebar:
             st.markdown(f"**{_name}**")
     else:
         st.markdown(f"👤 **{_name}**")
+
+    if st.button("🔄 Sync Strava", use_container_width=True):
+        _tok = st.session_state.get("access_token", "")
+        if _tok:
+            from strava_fetch import fetch_and_save_activities
+            from vector_store_supabase import embed_activities
+            with st.spinner("Syncing…"):
+                try:
+                    n = fetch_and_save_activities(
+                        user_id=_user_id,
+                        access_token=_tok,
+                        days=90,           # manual sync always fetches full window
+                    )
+                    embed_activities(user_id=_user_id)
+                    st.cache_data.clear()
+                    st.session_state["last_synced_at"] = None  # allow auto-sync next load
+                    st.success(f"Synced {n} activities.")
+                except Exception as exc:
+                    st.error(f"Sync failed: {exc}")
+        else:
+            st.warning("No access token — try reconnecting.")
 
     if st.button("Disconnect", use_container_width=True):
         for key in list(st.session_state.keys()):
