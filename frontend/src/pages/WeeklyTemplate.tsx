@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Icon } from '../components/ui/Icons'
+import { useSchedule, useSaveSchedule } from '../hooks/useSchedule'
+import type { WeeklySchedule } from '../types/schedule'
 
 interface Commitment {
   id: string
@@ -35,11 +37,6 @@ const DURATION_OPTIONS = [
   { value: '240', label: '4 hr' },
 ]
 
-const SAVED_DEFAULT: DayState = { mon: 45, wed: 60, thu: 60, sat: 180, sun: 120 }
-const COMMITMENTS_DEFAULT: Commitment[] = [
-  { id: 'c1', activity: 'Cycling', day: 'sat', time: '07:00', duration: '180' },
-]
-
 function formatDur(mins: number): string {
   const h = Math.floor(mins / 60)
   const m = mins % 60
@@ -48,15 +45,62 @@ function formatDur(mins: number): string {
   return `${h}h${m}`
 }
 
-let commitmentCounter = 10
+// Convert server WeeklySchedule → local state shapes
+function serverToLocal(data: WeeklySchedule): { days: DayState; commitments: Commitment[] } {
+  const days: DayState = {}
+  for (const [key, val] of Object.entries(data.days)) {
+    if (val.enabled) days[key] = val.duration_minutes
+  }
+  const commitments: Commitment[] = data.fixed_commitments.map((c, i) => ({
+    id: `c${i}`,
+    activity: c.label,
+    day: c.day,
+    time: c.time,
+    duration: String(c.duration_minutes),
+  }))
+  return { days, commitments }
+}
+
+// Convert local state → server WeeklySchedule body
+function localToServer(days: DayState, commitments: Commitment[]): WeeklySchedule {
+  const serverDays: WeeklySchedule['days'] = {}
+  for (const d of DAYS) {
+    serverDays[d.key] = {
+      enabled: days[d.key] !== undefined,
+      duration_minutes: days[d.key] ?? 60,
+    }
+  }
+  return {
+    days: serverDays,
+    fixed_commitments: commitments.map(c => ({
+      label: c.activity,
+      day: c.day,
+      time: c.time,
+      duration_minutes: Number(c.duration),
+    })),
+  }
+}
+
+let commitmentCounter = 100
 
 export default function WeeklyTemplate() {
-  const [savedDays] = useState<DayState>(SAVED_DEFAULT)
-  const [days, setDays] = useState<DayState>(SAVED_DEFAULT)
-  const [savedCommitments] = useState<Commitment[]>(COMMITMENTS_DEFAULT)
-  const [commitments, setCommitments] = useState<Commitment[]>(COMMITMENTS_DEFAULT)
+  const { data: serverData, isLoading } = useSchedule()
+  const saveSchedule = useSaveSchedule()
+
+  const [days, setDays] = useState<DayState>({})
+  const [commitments, setCommitments] = useState<Commitment[]>([])
   const [dirty, setDirty] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Populate local state from server data on first load (and after save invalidation)
+  useEffect(() => {
+    if (serverData && !dirty) {
+      const { days: d, commitments: c } = serverToLocal(serverData)
+      setDays(d)
+      setCommitments(c)
+    }
+  }, [serverData, dirty])
 
   function toggleDay(key: string) {
     setDays(prev => {
@@ -71,8 +115,7 @@ export default function WeeklyTemplate() {
   function adjustDur(key: string, delta: number) {
     setDays(prev => {
       if (prev[key] === undefined) return prev
-      const next = { ...prev, [key]: Math.max(15, Math.min(360, prev[key] + delta)) }
-      return next
+      return { ...prev, [key]: Math.max(15, Math.min(360, prev[key] + delta)) }
     })
     setDirty(true)
   }
@@ -89,8 +132,13 @@ export default function WeeklyTemplate() {
 
   function addCommitment() {
     commitmentCounter++
-    const id = `c${commitmentCounter}`
-    setCommitments(prev => [...prev, { id, activity: 'Cycling', day: 'sat', time: '07:00', duration: '60' }])
+    setCommitments(prev => [...prev, {
+      id: `c${commitmentCounter}`,
+      activity: 'Cycling',
+      day: 'sat',
+      time: '07:00',
+      duration: '60',
+    }])
     setDirty(true)
   }
 
@@ -105,15 +153,41 @@ export default function WeeklyTemplate() {
   }
 
   function discard() {
-    setDays(savedDays)
-    setCommitments(savedCommitments)
+    if (serverData) {
+      const { days: d, commitments: c } = serverToLocal(serverData)
+      setDays(d)
+      setCommitments(c)
+    }
     setDirty(false)
+    setSaveError(null)
   }
 
   function save() {
-    setDirty(false)
-    setSavedFlash(true)
-    setTimeout(() => setSavedFlash(false), 1400)
+    setSaveError(null)
+    saveSchedule.mutate(localToServer(days, commitments), {
+      onSuccess: () => {
+        setDirty(false)
+        setSavedFlash(true)
+        setTimeout(() => setSavedFlash(false), 1400)
+      },
+      onError: (err: unknown) => {
+        const msg = err instanceof Error ? err.message : 'Save failed'
+        setSaveError(msg)
+      },
+    })
+  }
+
+  if (isLoading) {
+    return (
+      <main className="et-main">
+        <div className="et-page-header">
+          <span className="et-page-title">Weekly Template</span>
+        </div>
+        <div className="et-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--et-stone)', fontSize: 13 }}>
+          Loading…
+        </div>
+      </main>
+    )
   }
 
   return (
@@ -236,7 +310,10 @@ export default function WeeklyTemplate() {
       {/* Save bar */}
       <div className={`et-save-bar${dirty ? ' visible' : ''}`}>
         <span className="et-save-bar-text">
-          <strong>Unsaved changes</strong>
+          {saveError
+            ? <span style={{ color: 'var(--et-red)' }}>{saveError}</span>
+            : <strong>Unsaved changes</strong>
+          }
         </span>
         <div className="et-save-bar-actions">
           {savedFlash && (
@@ -245,8 +322,13 @@ export default function WeeklyTemplate() {
             </span>
           )}
           <button className="et-save-discard" onClick={discard}>Discard</button>
-          <button className="et-save-btn" onClick={save}>
-            <Icon name="check" size="sm" aria-hidden /> Save template
+          <button
+            className="et-save-btn"
+            onClick={save}
+            disabled={saveSchedule.isPending}
+          >
+            <Icon name="check" size="sm" aria-hidden />
+            {saveSchedule.isPending ? 'Saving…' : 'Save template'}
           </button>
         </div>
       </div>

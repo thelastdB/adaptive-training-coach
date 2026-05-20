@@ -50,16 +50,29 @@ def update_goals(
     return _fetch_goals_profile(user_id)
 
 
-@router.get("/preferences/schedule")
-def get_schedule(user_id: str = Depends(get_current_user)):
-    """Return the user's weekly availability template. (stub)"""
-    return WeeklySchedule(days={}, fixed_commitments=[])
+@router.get("/preferences/schedule", response_model=WeeklySchedule)
+def get_schedule_endpoint(user_id: str = Depends(get_current_user)):
+    """Return the user's weekly availability template."""
+    from db_schedule import get_schedule
+
+    row = get_schedule(user_id)
+    if row is None:
+        return WeeklySchedule(days={}, fixed_commitments=[])
+    return WeeklySchedule(**row)
 
 
-@router.put("/preferences/schedule")
+@router.put("/preferences/schedule", response_model=WeeklySchedule)
 def update_schedule(
     body: WeeklySchedule,
     user_id: str = Depends(get_current_user),
 ):
-    """Update the user's weekly availability template. (stub)"""
-    return body
+    """Update the user's weekly availability template."""
+    from db_schedule import get_schedule, save_schedule
+
+    save_schedule(
+        user_id=user_id,
+        days={k: v.model_dump() for k, v in body.days.items()},
+        fixed_commitments=[c.model_dump() for c in body.fixed_commitments],
+    )
+    row = get_schedule(user_id)
+    return WeeklySchedule(**(row or {"days": {}, "fixed_commitments": []}))
