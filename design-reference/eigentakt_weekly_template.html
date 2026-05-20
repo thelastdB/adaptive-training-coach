@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eigentakt — weekly template</title>
+
+  <!--
+    EIGENTAKT WEEKLY TEMPLATE SETTINGS — DESIGN REFERENCE v1
+    =========================================================
+    Settings page for configuring default weekly training availability and
+    fixed recurring commitments.
+
+    Shell matches eigentakt_goals_settings.html exactly.
+    Content pattern follows onboarding steps 3 & 4 (availability + commitments),
+    adapted for in-place editing with explicit save.
+
+    SECTIONS
+    --------
+    1. Template note — explains default vs actual week behavior
+    2. Weekly availability — day toggles with duration inputs
+    3. Fixed commitments — recurring sessions that can't move
+    4. Save bar — appears when unsaved changes exist
+
+    COLOR TOKENS
+    ------------
+    --et-graphite: #2C2C2A
+    --et-olive:    #4A5C3E
+    --et-olive-dk: #3A4C2E
+    --et-bone:     #F5F2EC
+    --et-stone:    #6B6B67
+    --et-border:   #D8D4CC
+    --et-card:     #FFFFFF
+    --et-surface:  #EDE9E2
+    --et-amber:    #8A6020
+
+    INTERACTION NOTES
+    -----------------
+    - Day toggles: click to enable/disable. Duration input appears when enabled.
+    - Duration can be edited inline (number input or +/- stepper).
+    - Commitments: add via "Add commitment" button. Each row is inline editable.
+    - Save bar: slides in at bottom when any change is made. Sticky.
+    - "Reset to current week" discards changes, returns to last saved state.
+  -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens ── */
+    :root {
+      --et-graphite: #2C2C2A;
+      --et-olive:    #4A5C3E;
+      --et-olive-dk: #3A4C2E;
+      --et-bone:     #F5F2EC;
+      --et-stone:    #6B6B67;
+      --et-border:   #D8D4CC;
+      --et-card:     #FFFFFF;
+      --et-surface:  #EDE9E2;
+      --et-amber:    #8A6020;
+      --et-red:      #8B3A3A;
+    }
+
+    /* ── Base ── */
+    body {
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+      background: var(--et-bone);
+      color: var(--et-graphite);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    .et-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      height: 44px;
+      background: var(--et-bone);
+      border-bottom: 0.5px solid var(--et-border);
+    }
+    .et-topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .et-wordmark {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--et-graphite);
+    }
+    .et-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .et-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #D4CFC4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--et-stone);
+    }
+
+    /* ── Layout ── */
+    .et-layout {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      height: calc(100vh - 44px);
+    }
+
+    /* ── Sidebar ── */
+    .et-sidebar {
+      border-right: 0.5px solid var(--et-border);
+      background: var(--et-bone);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 2px;
+      position: relative;
+      z-index: 10;
+    }
+    .et-sidebar-item {
+      position: relative;
+      width: 36px;
+    }
+    .et-sidebar-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      color: var(--et-stone);
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+    .et-sidebar-icon.active {
+      background: var(--et-surface);
+      color: var(--et-graphite);
+    }
+    .et-sidebar-icon:hover {
+      background: var(--et-surface);
+      color: var(--et-olive);
+    }
+    .et-sidebar-tooltip {
+      position: absolute;
+      left: 44px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--et-graphite);
+      color: var(--et-bone);
+      font-size: 11px;
+      white-space: nowrap;
+      padding: 4px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 100;
+    }
+    .et-sidebar-item:hover .et-sidebar-tooltip { opacity: 1; }
+    .et-sidebar-divider {
+      width: 24px;
+      height: 0.5px;
+      background: var(--et-border);
+      margin: 6px 0;
+    }
+    .et-sidebar-bottom {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .et-event-dot {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--et-olive);
+    }
+
+    /* ── Main ── */
+    .et-main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── Page header ── */
+    .et-page-header {
+      padding: 0 24px;
+      height: 44px;
+      border-bottom: 0.5px solid var(--et-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .et-page-title {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+    }
+
+    /* ── Scrollable content ── */
+    .et-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 24px 80px;
+    }
+
+    /* ── Section ── */
+    .et-section {
+      margin-bottom: 32px;
+    }
+    .et-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .et-section-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+    }
+    .et-section-divider {
+      height: 0.5px;
+      background: var(--et-border);
+      margin-bottom: 16px;
+    }
+
+    /* ── Shared buttons ── */
+    .et-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 0.5px solid #A8A4A0;
+      background: var(--et-surface);
+      color: var(--et-graphite);
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+    }
+    .et-btn i { font-size: 12px; }
+    .et-btn:hover { background: var(--et-border); }
+    .et-btn-primary {
+      background: var(--et-olive);
+      color: var(--et-bone);
+      border-color: var(--et-olive-dk);
+    }
+    .et-btn-primary:hover { background: var(--et-olive-dk); }
+    .et-btn-ghost {
+      background: none;
+      border-color: transparent;
+      color: var(--et-stone);
+    }
+    .et-btn-ghost:hover { background: var(--et-surface); color: var(--et-graphite); }
+
+    /* ── Template note ── */
+    .et-template-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 11px 14px;
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      max-width: 640px;
+    }
+    .et-template-note-icon {
+      font-size: 14px;
+      color: var(--et-stone);
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .et-template-note-text {
+      font-size: 12px;
+      color: var(--et-stone);
+      line-height: 1.6;
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+
+    /* ── Day grid ── */
+    .et-day-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      max-width: 640px;
+    }
+
+    .et-day-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Day toggle button */
+    .et-day-btn {
+      width: 100%;
+      aspect-ratio: 1;
+      min-width: 0;
+      border-radius: 6px;
+      border: 0.5px solid var(--et-border);
+      background: var(--et-card);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--et-stone);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      transition: border-color 0.15s, background 0.15s, color 0.15s;
+    }
+    .et-day-btn:hover:not(.active) {
+      border-color: #B0B0AC;
+      background: var(--et-surface);
+    }
+    .et-day-btn.active {
+      border: 1px solid var(--et-olive);
+      color: var(--et-olive);
+      background: var(--et-card);
+    }
+    .et-day-initial {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      line-height: 1;
+    }
+    .et-day-name-label {
+      font-size: 8px;
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: inherit;
+      opacity: 0.7;
+      line-height: 1;
+    }
+
+    /* Duration block under each active day */
+    .et-day-dur {
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+    .et-day-col.active .et-day-dur {
+      display: flex;
+    }
+
+    /* Duration stepper */
+    .et-dur-stepper {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      border: 0.5px solid var(--et-border);
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--et-card);
+    }
+    .et-dur-display {
+      padding: 4px 0 2px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      line-height: 1;
+      cursor: default;
+    }
+    .et-dur-unit {
+      text-align: center;
+      font-size: 8px;
+      color: var(--et-stone);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding-bottom: 3px;
+      line-height: 1;
+    }
+    .et-dur-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-top: 0.5px solid var(--et-border);
+    }
+    .et-dur-btn {
+      background: none;
+      border: none;
+      padding: 4px 0;
+      font-size: 11px;
+      color: var(--et-stone);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      font-family: inherit;
+      line-height: 1;
+    }
+    .et-dur-btn:hover {
+      background: var(--et-surface);
+      color: var(--et-olive);
+    }
+    .et-dur-btn:first-child {
+      border-right: 0.5px solid var(--et-border);
+    }
+
+    /* Weekly summary */
+    .et-week-summary {
+      margin-top: 14px;
+      max-width: 640px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .et-week-summary-text {
+      font-size: 11px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+    .et-week-summary-text strong {
+      color: var(--et-graphite);
+      font-style: normal;
+      font-weight: 500;
+    }
+
+    /* ── Commitments ── */
+    .et-commitments-wrap {
+      max-width: 640px;
+    }
+
+    .et-commitments-empty {
+      padding: 18px 16px;
+      border: 0.5px dashed var(--et-border);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .et-commitments-empty-text {
+      font-size: 12px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+
+    .et-commitment-table {
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .et-commitment-thead {
+      display: grid;
+      grid-template-columns: 110px 100px 90px 80px 1fr 32px;
+      padding: 6px 12px;
+      border-bottom: 0.5px solid var(--et-border);
+      background: var(--et-surface);
+      gap: 8px;
+      align-items: center;
+    }
+    .et-th {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+    }
+
+    .et-commitment-row {
+      display: grid;
+      grid-template-columns: 110px 100px 90px 80px 1fr 32px;
+      padding: 8px 12px;
+      border-bottom: 0.5px solid var(--et-surface);
+      gap: 8px;
+      align-items: center;
+    }
+    .et-commitment-row:last-child {
+      border-bottom: none;
+    }
+
+    .et-inline-select,
+    .et-inline-input {
+      width: 100%;
+      height: 28px;
+      padding: 0 8px;
+      border: 0.5px solid var(--et-border);
+      border-radius: 3px;
+      background: var(--et-bone);
+      font-family: inherit;
+      font-size: 11px;
+      color: var(--et-graphite);
+      outline: none;
+      appearance: none;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .et-inline-select:focus,
+    .et-inline-input:focus {
+      border-color: var(--et-olive);
+      background: var(--et-card);
+    }
+    .et-inline-select-wrap {
+      position: relative;
+    }
+    .et-inline-select-wrap::after {
+      content: '\ea5f';
+      font-family: 'tabler-icons';
+      position: absolute;
+      right: 7px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px;
+      color: var(--et-stone);
+      pointer-events: none;
+    }
+    .et-inline-select { padding-right: 22px; }
+
+    /* Duration select display */
+    .et-dur-select-wrap {
+      position: relative;
+    }
+    .et-dur-select-wrap::after {
+      content: '\ea5f';
+      font-family: 'tabler-icons';
+      position: absolute;
+      right: 7px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 10px;
+      color: var(--et-stone);
+      pointer-events: none;
+    }
+
+    /* Intensity badge in commitment rows */
+    .et-intensity-wrap {
+      display: flex;
+      align-items: center;
+    }
+    .et-intensity-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 9px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .et-intensity-easy     { background: #D0E8C8; color: #1E4A14; }
+    .et-intensity-moderate { background: #E8D8A8; color: #5A3A08; }
+    .et-intensity-hard     { background: #E8C0C0; color: #5A1A1A; }
+
+    /* Lock badge */
+    .et-lock-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 9px;
+      font-weight: 500;
+      color: var(--et-olive);
+    }
+    .et-lock-badge i { font-size: 10px; }
+
+    .et-remove-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      border: none;
+      background: none;
+      color: #B0ACA6;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .et-remove-btn:hover {
+      color: var(--et-red);
+      background: #F5EDED;
+    }
+
+    .et-add-commitment {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--et-olive);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .et-add-commitment:hover { color: var(--et-olive-dk); }
+    .et-add-commitment i { font-size: 14px; }
+
+    /* Commitment note */
+    .et-commitment-note {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+      max-width: 640px;
+    }
+
+    /* ── Save bar ── */
+    .et-save-bar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      background: var(--et-graphite);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.25, 0, 0.1, 1);
+      z-index: 20;
+    }
+    .et-save-bar.visible {
+      transform: translateY(0);
+    }
+    .et-save-bar-text {
+      font-size: 12px;
+      color: rgba(245, 242, 236, 0.6);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+    .et-save-bar-text strong {
+      color: var(--et-bone);
+      font-style: normal;
+      font-weight: 500;
+    }
+    .et-save-bar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .et-save-discard {
+      font-size: 11px;
+      font-weight: 500;
+      color: rgba(245, 242, 236, 0.5);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 5px 8px;
+      border-radius: 3px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .et-save-discard:hover {
+      color: var(--et-bone);
+      background: rgba(245, 242, 236, 0.08);
+    }
+    .et-save-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--et-olive);
+      color: var(--et-bone);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .et-save-btn:hover { background: var(--et-olive-dk); }
+    .et-save-btn i { font-size: 12px; }
+
+    /* Saved flash */
+    .et-saved-flash {
+      font-size: 11px;
+      color: rgba(245, 242, 236, 0.5);
+      display: none;
+      align-items: center;
+      gap: 5px;
+    }
+    .et-saved-flash.visible {
+      display: flex;
+    }
+    .et-saved-flash i { font-size: 12px; color: #8FCC6A; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Top bar ── -->
+  <div class="et-topbar">
+    <div class="et-topbar-logo">
+      <svg width="14" height="20" viewBox="0 0 160 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <polygon points="0,220 160,220 104,16 56,16" fill="#4A5C3E"/>
+        <polygon points="56,16 104,16 98,0 62,0" fill="#3A4C2E"/>
+        <polygon points="36,204 124,204 96,68 64,68" fill="#F5F2EC"/>
+        <line x1="80" y1="202" x2="100" y2="76" stroke="#4A5C3E" stroke-width="6" stroke-linecap="round"/>
+        <rect x="94" y="86" width="13" height="13" rx="1" fill="#4A5C3E" transform="rotate(45 100.5 92.5)"/>
+      </svg>
+      <span class="et-wordmark">eigentakt</span>
+    </div>
+    <div class="et-topbar-right">
+      <button class="et-btn"><i class="ti ti-refresh"></i> Sync</button>
+      <div class="et-avatar">RF</div>
+    </div>
+  </div>
+
+  <div class="et-layout">
+
+    <!-- ── Sidebar ── -->
+    <aside class="et-sidebar">
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="This week"><i class="ti ti-calendar-week"></i></button>
+        <span class="et-sidebar-tooltip">This week</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Plan history"><i class="ti ti-history"></i></button>
+        <span class="et-sidebar-tooltip">Plan history</span>
+      </div>
+      <div class="et-sidebar-divider"></div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Goals"><i class="ti ti-target"></i></button>
+        <span class="et-sidebar-tooltip">Goals</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon active" aria-label="Weekly template"><i class="ti ti-clock"></i></button>
+        <span class="et-sidebar-tooltip">Weekly template</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Profile"><i class="ti ti-user"></i></button>
+        <span class="et-sidebar-tooltip">Profile</span>
+      </div>
+      <div class="et-sidebar-bottom">
+        <div class="et-sidebar-divider"></div>
+        <div class="et-sidebar-item">
+          <button class="et-sidebar-icon" aria-label="Upcoming events" style="position:relative;">
+            <i class="ti ti-flag"></i>
+            <span class="et-event-dot"></span>
+          </button>
+          <span class="et-sidebar-tooltip">Flying Wheels · 12 days</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Main ── -->
+    <main class="et-main">
+
+      <div class="et-page-header">
+        <span class="et-page-title">Weekly Template</span>
+      </div>
+
+      <div class="et-content" id="mainContent">
+
+        <!-- ── Template note ── -->
+        <div class="et-section">
+          <div class="et-template-note">
+            <i class="ti ti-info-circle et-template-note-icon"></i>
+            <p class="et-template-note-text">
+              This is your default week. eigentakt uses it as a starting point and adapts around schedule changes, fatigue, and proximity to your target event. Weeks with unusual constraints won't be forced to match it exactly.
+            </p>
+          </div>
+        </div>
+
+        <!-- ── Section: Weekly availability ── -->
+        <div class="et-section">
+          <div class="et-section-header">
+            <span class="et-section-label">Weekly availability</span>
+          </div>
+          <div class="et-section-divider"></div>
+
+          <div class="et-day-grid" id="dayGrid">
+            <!-- Rendered by JS -->
+          </div>
+
+          <div class="et-week-summary">
+            <p class="et-week-summary-text" id="weekSummary">Select at least two days to set a training template.</p>
+          </div>
+        </div>
+
+        <!-- ── Section: Fixed commitments ── -->
+        <div class="et-section">
+          <div class="et-section-header">
+            <span class="et-section-label">Fixed commitments</span>
+          </div>
+          <div class="et-section-divider"></div>
+
+          <div class="et-commitments-wrap">
+
+            <div class="et-commitments-empty" id="commitmentsEmpty">
+              <span class="et-commitments-empty-text">No fixed commitments. eigentakt has full flexibility each week.</span>
+              <button class="et-btn" onclick="addCommitment()"><i class="ti ti-plus"></i> Add</button>
+            </div>
+
+            <div id="commitmentTable" style="display:none;">
+              <div class="et-commitment-table">
+                <div class="et-commitment-thead">
+                  <span class="et-th">Activity</span>
+                  <span class="et-th">Day</span>
+                  <span class="et-th">Time</span>
+                  <span class="et-th">Duration</span>
+                  <span class="et-th"></span>
+                  <span></span>
+                </div>
+                <div id="commitmentRows">
+                  <!-- Rows injected by JS -->
+                </div>
+              </div>
+
+              <button class="et-add-commitment" onclick="addCommitment()">
+                <i class="ti ti-plus"></i> Add commitment
+              </button>
+            </div>
+
+          </div>
+
+          <p class="et-commitment-note" id="commitmentNote" style="display:none;">
+            Fixed commitments are locked in your plan each week. eigentakt plans around them rather than replacing them.
+          </p>
+
+        </div>
+
+      </div>
+
+      <!-- ── Save bar ── -->
+      <div class="et-save-bar" id="saveBar">
+        <span class="et-save-bar-text" id="saveBarText"><strong>Unsaved changes</strong></span>
+        <div class="et-save-bar-actions">
+          <span class="et-saved-flash" id="savedFlash"><i class="ti ti-check"></i> Saved</span>
+          <button class="et-save-discard" onclick="discardChanges()">Discard</button>
+          <button class="et-save-btn" onclick="saveChanges()"><i class="ti ti-check"></i> Save template</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // ── State ──
+    const DAYS = [
+      { key: 'mon', label: 'Mon', initial: 'M' },
+      { key: 'tue', label: 'Tue', initial: 'T' },
+      { key: 'wed', label: 'Wed', initial: 'W' },
+      { key: 'thu', label: 'Thu', initial: 'T' },
+      { key: 'fri', label: 'Fri', initial: 'F' },
+      { key: 'sat', label: 'Sat', initial: 'S' },
+      { key: 'sun', label: 'Sun', initial: 'S' },
+    ];
+
+    // Default state (pre-populated as if user has been using app)
+    let saved = {
+      days: { mon: 45, wed: 60, thu: 60, sat: 180, sun: 120 },
+      commitments: [
+        { id: 'c1', activity: 'cycling', day: 'sat', time: '07:00', duration: '180' },
+      ],
+    };
+
+    let current = JSON.parse(JSON.stringify(saved));
+    let commitmentCounter = 10;
+    let dirty = false;
+
+    // ── Day grid ──
+    function buildDayGrid() {
+      const grid = document.getElementById('dayGrid');
+      grid.innerHTML = '';
+      DAYS.forEach(d => {
+        const isActive = current.days[d.key] !== undefined;
+        const dur = current.days[d.key] || 60;
+        const col = document.createElement('div');
+        col.className = `et-day-col${isActive ? ' active' : ''}`;
+        col.id = `col-${d.key}`;
+        col.innerHTML = `
+          <button
+            class="et-day-btn${isActive ? ' active' : ''}"
+            id="btn-${d.key}"
+            onclick="toggleDay('${d.key}')"
+            aria-pressed="${isActive}"
+            aria-label="${d.label}"
+          >
+            <span class="et-day-initial">${d.initial}</span>
+            <span class="et-day-name-label">${d.label}</span>
+          </button>
+          <div class="et-day-dur" id="dur-${d.key}">
+            <div class="et-dur-stepper">
+              <div class="et-dur-display" id="dur-val-${d.key}">${formatDur(dur)}</div>
+              <div class="et-dur-unit">hr</div>
+              <div class="et-dur-btns">
+                <button class="et-dur-btn" onclick="adjustDur('${d.key}', -15)" aria-label="Decrease">−</button>
+                <button class="et-dur-btn" onclick="adjustDur('${d.key}', 15)" aria-label="Increase">+</button>
+              </div>
+            </div>
+          </div>
+        `;
+        grid.appendChild(col);
+      });
+      updateSummary();
+    }
+
+    function formatDur(mins) {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      if (h === 0) return `${m}m`;
+      if (m === 0) return `${h}h`;
+      return `${h}h${m}`;
+    }
+
+    function toggleDay(key) {
+      if (current.days[key] !== undefined) {
+        delete current.days[key];
+      } else {
+        current.days[key] = 60;
+      }
+      const isActive = current.days[key] !== undefined;
+      const btn = document.getElementById(`btn-${key}`);
+      const col = document.getElementById(`col-${key}`);
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive);
+      col.classList.toggle('active', isActive);
+      updateSummary();
+      markDirty();
+    }
+
+    function adjustDur(key, delta) {
+      if (current.days[key] === undefined) return;
+      const newVal = Math.max(15, Math.min(360, current.days[key] + delta));
+      current.days[key] = newVal;
+      document.getElementById(`dur-val-${key}`).textContent = formatDur(newVal);
+      updateSummary();
+      markDirty();
+    }
+
+    function updateSummary() {
+      const keys = Object.keys(current.days);
+      const el = document.getElementById('weekSummary');
+      if (keys.length === 0) {
+        el.innerHTML = 'Select at least two days to set a training template.';
+        return;
+      }
+      if (keys.length === 1) {
+        el.innerHTML = '1 day selected. Select at least one more.';
+        return;
+      }
+      const total = Object.values(current.days).reduce((a, b) => a + b, 0);
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      const timeStr = m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+      el.innerHTML = `<strong>${keys.length} days</strong> — ${timeStr} of training time per week.`;
+    }
+
+    // ── Commitments ──
+    const ACTIVITY_OPTIONS = [
+      { value: 'cycling',  label: 'Cycling' },
+      { value: 'run',      label: 'Run' },
+      { value: 'swim',     label: 'Swim' },
+      { value: 'yoga',     label: 'Yoga' },
+      { value: 'strength', label: 'Strength' },
+      { value: 'other',    label: 'Other' },
+    ];
+
+    const DURATION_OPTIONS = [
+      { value: '30',  label: '30 min' },
+      { value: '45',  label: '45 min' },
+      { value: '60',  label: '1 hr' },
+      { value: '90',  label: '1.5 hr' },
+      { value: '120', label: '2 hr' },
+      { value: '150', label: '2.5 hr' },
+      { value: '180', label: '3 hr' },
+      { value: '240', label: '4 hr' },
+    ];
+
+    function renderCommitments() {
+      const empty = document.getElementById('commitmentsEmpty');
+      const table = document.getElementById('commitmentTable');
+      const note  = document.getElementById('commitmentNote');
+      const rows  = document.getElementById('commitmentRows');
+
+      if (current.commitments.length === 0) {
+        empty.style.display = '';
+        table.style.display = 'none';
+        note.style.display = 'none';
+        return;
+      }
+
+      empty.style.display = 'none';
+      table.style.display = '';
+      note.style.display = '';
+
+      rows.innerHTML = '';
+      current.commitments.forEach(c => {
+        const actOpts = ACTIVITY_OPTIONS.map(o =>
+          `<option value="${o.value}"${o.value === c.activity ? ' selected' : ''}>${o.label}</option>`
+        ).join('');
+        const dayOpts = DAYS.map(d =>
+          `<option value="${d.key}"${d.key === c.day ? ' selected' : ''}>${d.label}</option>`
+        ).join('');
+        const durOpts = DURATION_OPTIONS.map(o =>
+          `<option value="${o.value}"${o.value === c.duration ? ' selected' : ''}>${o.label}</option>`
+        ).join('');
+
+        const row = document.createElement('div');
+        row.className = 'et-commitment-row';
+        row.id = `row-${c.id}`;
+        row.innerHTML = `
+          <div class="et-inline-select-wrap">
+            <select class="et-inline-select" onchange="updateCommitment('${c.id}', 'activity', this.value)">${actOpts}</select>
+          </div>
+          <div class="et-inline-select-wrap">
+            <select class="et-inline-select" onchange="updateCommitment('${c.id}', 'day', this.value)">${dayOpts}</select>
+          </div>
+          <input class="et-inline-input" type="time" value="${c.time}" onchange="updateCommitment('${c.id}', 'time', this.value)" />
+          <div class="et-dur-select-wrap et-inline-select-wrap">
+            <select class="et-inline-select" onchange="updateCommitment('${c.id}', 'duration', this.value)">${durOpts}</select>
+          </div>
+          <div class="et-lock-badge"><i class="ti ti-lock"></i> Fixed</div>
+          <button class="et-remove-btn" onclick="removeCommitment('${c.id}')" aria-label="Remove"><i class="ti ti-x"></i></button>
+        `;
+        rows.appendChild(row);
+      });
+    }
+
+    function addCommitment() {
+      commitmentCounter++;
+      const id = `c${commitmentCounter}`;
+      current.commitments.push({ id, activity: 'cycling', day: 'sat', time: '07:00', duration: '60' });
+      renderCommitments();
+      markDirty();
+    }
+
+    function removeCommitment(id) {
+      current.commitments = current.commitments.filter(c => c.id !== id);
+      renderCommitments();
+      markDirty();
+    }
+
+    function updateCommitment(id, field, value) {
+      const c = current.commitments.find(x => x.id === id);
+      if (c) { c[field] = value; markDirty(); }
+    }
+
+    // ── Dirty state ──
+    function markDirty() {
+      dirty = true;
+      document.getElementById('saveBar').classList.add('visible');
+      document.getElementById('savedFlash').classList.remove('visible');
+    }
+
+    function discardChanges() {
+      current = JSON.parse(JSON.stringify(saved));
+      dirty = false;
+      buildDayGrid();
+      renderCommitments();
+      document.getElementById('saveBar').classList.remove('visible');
+    }
+
+    function saveChanges() {
+      saved = JSON.parse(JSON.stringify(current));
+      dirty = false;
+      document.getElementById('saveBtn') && null;
+      const flash = document.getElementById('savedFlash');
+      flash.classList.add('visible');
+      document.querySelector('.et-save-discard').style.display = 'none';
+      document.querySelector('.et-save-btn').style.display = 'none';
+      setTimeout(() => {
+        document.getElementById('saveBar').classList.remove('visible');
+        setTimeout(() => {
+          flash.classList.remove('visible');
+          document.querySelector('.et-save-discard').style.display = '';
+          document.querySelector('.et-save-btn').style.display = '';
+        }, 400);
+      }, 1200);
+    }
+
+    // ── Init ──
+    buildDayGrid();
+    renderCommitments();
+  </script>
+
+</body>
+</html>

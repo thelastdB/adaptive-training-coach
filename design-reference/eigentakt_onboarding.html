@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eigentakt — setup</title>
+
+  <!--
+    EIGENTAKT ONBOARDING — DESIGN REFERENCE v1
+    ===========================================
+    Post-Strava OAuth onboarding flow. 4 steps:
+      1. Primary goal
+      2. Target event (conditional — shown only if goal = target event)
+      3. Weekly availability
+      4. Fixed commitments
+
+    STEP TRANSITION
+    ---------------
+    CSS keyframe: et-slide-in / et-slide-out
+    Duration: 380ms cubic-bezier(0.25, 0, 0.1, 1)
+    Direction: forward = slide left; back = slide right
+    Pendular feel — no bounce, no overshoot.
+
+    PROGRESS
+    --------
+    Thin 0.5px line segments (not a bar), one per step.
+    Active segment: --et-olive. Inactive: --et-border.
+
+    COLOR TOKENS
+    ------------
+    --et-graphite: #2C2C2A
+    --et-olive:    #4A5C3E
+    --et-olive-dk: #3A4C2E
+    --et-bone:     #F5F2EC
+    --et-stone:    #6B6B67
+    --et-border:   #D8D4CC
+    --et-card:     #FFFFFF
+    --et-surface:  #EDE9E2
+    --et-amber:    #8A6020
+
+    TYPOGRAPHY
+    ----------
+    Primary UI:   Geist — weights 400, 500, 600
+    Body/desc:    Lora — italic for editorial/label moments
+    Import:       Google Fonts (Lora). Geist via CDN fallback.
+  -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens ── */
+    :root {
+      --et-graphite: #2C2C2A;
+      --et-olive:    #4A5C3E;
+      --et-olive-dk: #3A4C2E;
+      --et-bone:     #F5F2EC;
+      --et-stone:    #6B6B67;
+      --et-border:   #D8D4CC;
+      --et-card:     #FFFFFF;
+      --et-surface:  #EDE9E2;
+      --et-amber:    #8A6020;
+    }
+
+    /* ── Base ── */
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+    body {
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+      background: var(--et-bone);
+      color: var(--et-graphite);
+    }
+
+    /* ── Layout: left panel + right content ── */
+    .et-shell {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      height: 100vh;
+    }
+
+    /* ── Left panel ── */
+    .et-panel {
+      background: var(--et-graphite);
+      display: flex;
+      flex-direction: column;
+      padding: 32px 28px 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Subtle grid texture on left panel */
+    .et-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(245,242,236,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(245,242,236,0.03) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none;
+    }
+
+    .et-panel-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: relative;
+      z-index: 1;
+    }
+    .et-wordmark {
+      font-size: 14px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--et-bone);
+    }
+
+    .et-panel-strava {
+      position: relative;
+      z-index: 1;
+      margin-top: 28px;
+      padding: 10px 12px;
+      background: rgba(245,242,236,0.06);
+      border: 0.5px solid rgba(245,242,236,0.12);
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .et-strava-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #8FCC6A;
+      flex-shrink: 0;
+    }
+    .et-strava-text {
+      font-size: 11px;
+      color: rgba(245,242,236,0.7);
+    }
+    .et-strava-name {
+      font-weight: 500;
+      color: var(--et-bone);
+    }
+
+    .et-panel-steps {
+      position: relative;
+      z-index: 1;
+      margin-top: 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    .et-panel-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      position: relative;
+      cursor: pointer;
+    }
+    .et-panel-step + .et-panel-step::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 11px;
+      width: 0.5px;
+      height: 100%;
+      background: rgba(245,242,236,0.1);
+      transform: translateY(-50%);
+    }
+    .et-step-node {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 0.5px solid rgba(245,242,236,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 9px;
+      font-weight: 500;
+      color: rgba(245,242,236,0.4);
+      background: transparent;
+      transition: all 0.25s ease;
+      position: relative;
+      z-index: 1;
+    }
+    .et-panel-step.active .et-step-node {
+      background: var(--et-olive);
+      border-color: var(--et-olive);
+      color: var(--et-bone);
+    }
+    .et-panel-step.complete .et-step-node {
+      background: rgba(74, 92, 62, 0.3);
+      border-color: var(--et-olive);
+      color: var(--et-olive);
+    }
+    .et-step-meta {
+      padding-top: 2px;
+    }
+    .et-step-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(245,242,236,0.35);
+      transition: color 0.25s ease;
+    }
+    .et-panel-step.active .et-step-label {
+      color: var(--et-bone);
+    }
+    .et-panel-step.complete .et-step-label {
+      color: rgba(245,242,236,0.55);
+    }
+    .et-step-sub {
+      font-size: 10px;
+      color: rgba(245,242,236,0.25);
+      margin-top: 1px;
+      line-height: 1.4;
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+    .et-panel-step.active .et-step-sub {
+      color: rgba(245,242,236,0.45);
+    }
+
+    .et-panel-bottom {
+      position: relative;
+      z-index: 1;
+      margin-top: auto;
+    }
+    .et-panel-tagline {
+      font-size: 11px;
+      color: rgba(245,242,236,0.25);
+      line-height: 1.6;
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+
+    /* ── Right content area ── */
+    .et-content {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    .et-topbar {
+      height: 44px;
+      border-bottom: 0.5px solid var(--et-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      flex-shrink: 0;
+    }
+    .et-progress-bar {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .et-progress-seg {
+      height: 2px;
+      width: 40px;
+      background: var(--et-border);
+      border-radius: 1px;
+      transition: background 0.3s ease;
+    }
+    .et-progress-seg.active {
+      background: var(--et-olive);
+    }
+    .et-progress-seg.done {
+      background: var(--et-olive);
+      opacity: 0.5;
+    }
+    .et-topbar-step-label {
+      font-size: 11px;
+      color: var(--et-stone);
+      font-weight: 500;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Step viewport ── */
+    .et-step-viewport {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .et-step {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 56px 64px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateX(40px);
+    }
+    .et-step.active {
+      opacity: 1;
+      pointer-events: all;
+      transform: translateX(0);
+      transition: opacity 0.38s cubic-bezier(0.25, 0, 0.1, 1),
+                  transform 0.38s cubic-bezier(0.25, 0, 0.1, 1);
+    }
+    .et-step.exit-left {
+      opacity: 0;
+      transform: translateX(-40px);
+      transition: opacity 0.28s cubic-bezier(0.25, 0, 0.1, 1),
+                  transform 0.28s cubic-bezier(0.25, 0, 0.1, 1);
+      pointer-events: none;
+    }
+    .et-step.enter-right {
+      transform: translateX(40px);
+      opacity: 0;
+    }
+    .et-step.enter-left {
+      transform: translateX(-40px);
+      opacity: 0;
+    }
+
+    /* ── Step anatomy ── */
+    .et-step-eyebrow {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--et-olive);
+      font-weight: 500;
+      margin-bottom: 12px;
+    }
+    .et-step-title {
+      font-size: 26px;
+      font-weight: 500;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      color: var(--et-graphite);
+      margin-bottom: 8px;
+    }
+    .et-step-desc {
+      font-size: 13px;
+      color: var(--et-stone);
+      line-height: 1.65;
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+      max-width: 420px;
+      margin-bottom: 36px;
+    }
+
+    /* ── Goal cards ── */
+    .et-goal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      max-width: 600px;
+    }
+    .et-goal-card {
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      padding: 18px 16px;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease;
+      position: relative;
+    }
+    .et-goal-card:hover {
+      border-color: #B0B0AC;
+      background: var(--et-surface);
+    }
+    .et-goal-card.selected {
+      border: 1px solid var(--et-olive);
+      background: var(--et-card);
+    }
+    .et-goal-card.selected::after {
+      content: '';
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--et-olive);
+    }
+    .et-goal-icon {
+      font-size: 18px;
+      color: var(--et-stone);
+      margin-bottom: 10px;
+    }
+    .et-goal-card.selected .et-goal-icon {
+      color: var(--et-olive);
+    }
+    .et-goal-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      margin-bottom: 4px;
+    }
+    .et-goal-desc {
+      font-size: 11px;
+      color: var(--et-stone);
+      line-height: 1.5;
+    }
+
+    /* ── Form fields ── */
+    .et-field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-width: 480px;
+    }
+    .et-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .et-field-row {
+      display: grid;
+      gap: 12px;
+    }
+    .et-field-row.cols-2 { grid-template-columns: 1fr 1fr; }
+    .et-field-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .et-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--et-stone);
+      letter-spacing: 0.04em;
+    }
+    .et-input,
+    .et-select {
+      height: 36px;
+      padding: 0 12px;
+      border: 0.5px solid var(--et-border);
+      border-radius: 4px;
+      background: var(--et-card);
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--et-graphite);
+      outline: none;
+      appearance: none;
+      transition: border-color 0.15s ease;
+    }
+    .et-input:focus,
+    .et-select:focus {
+      border-color: var(--et-olive);
+    }
+    .et-input::placeholder { color: #B0ACA6; }
+    .et-select-wrap {
+      position: relative;
+    }
+    .et-select-wrap::after {
+      content: '\ea5f'; /* ti-chevron-down */
+      font-family: 'tabler-icons';
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 12px;
+      color: var(--et-stone);
+      pointer-events: none;
+    }
+    .et-select { width: 100%; padding-right: 28px; }
+
+    /* ── Week grid (availability) ── */
+    .et-week-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      max-width: 560px;
+    }
+    .et-day-toggle {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+    .et-day-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      border: 0.5px solid var(--et-border);
+      background: var(--et-card);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--et-stone);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .et-day-btn:hover { border-color: #B0B0AC; }
+    .et-day-btn.active {
+      border: 1px solid var(--et-olive);
+      background: var(--et-card);
+      color: var(--et-olive);
+    }
+    .et-day-initial {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+    }
+    .et-day-label {
+      font-size: 9px;
+      color: var(--et-stone);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    /* Duration inputs that appear under active days */
+    .et-day-duration {
+      width: 44px;
+      position: relative;
+    }
+    .et-duration-input {
+      width: 44px;
+      height: 28px;
+      border: 0.5px solid var(--et-border);
+      border-radius: 3px;
+      background: var(--et-card);
+      font-family: inherit;
+      font-size: 10px;
+      color: var(--et-graphite);
+      text-align: center;
+      outline: none;
+      padding: 0 3px;
+      transition: border-color 0.15s;
+    }
+    .et-duration-input:focus { border-color: var(--et-olive); }
+    .et-duration-unit {
+      font-size: 8px;
+      color: var(--et-stone);
+      text-align: center;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Hidden / visible */
+    .et-day-dur-wrap {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+    .et-day-toggle.active .et-day-dur-wrap {
+      display: flex;
+    }
+
+    .et-availability-note {
+      margin-top: 14px;
+      font-size: 11px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+      max-width: 480px;
+    }
+
+    /* ── Commitments ── */
+    .et-commitment-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 480px;
+    }
+    .et-commitment-row {
+      display: grid;
+      grid-template-columns: 120px 90px 90px 32px;
+      gap: 8px;
+      align-items: center;
+    }
+    .et-commitment-row.header .et-label {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+    }
+    .et-remove-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      border: none;
+      background: none;
+      color: #B0ACA6;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .et-remove-btn:hover {
+      color: #8B3A3A;
+      background: #F5EDED;
+    }
+    .et-add-commitment {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--et-olive);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      letter-spacing: 0.02em;
+    }
+    .et-add-commitment:hover { color: var(--et-olive-dk); }
+    .et-add-commitment i { font-size: 14px; }
+
+    .et-commitment-empty {
+      padding: 20px;
+      border: 0.5px dashed var(--et-border);
+      border-radius: 5px;
+      text-align: center;
+      max-width: 480px;
+    }
+    .et-commitment-empty p {
+      font-size: 12px;
+      color: var(--et-stone);
+      line-height: 1.55;
+    }
+    .et-commitment-empty em {
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+
+    /* ── Footer nav ── */
+    .et-footer {
+      height: 64px;
+      border-top: 0.5px solid var(--et-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 64px;
+      flex-shrink: 0;
+    }
+    .et-footer-back {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--et-stone);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      transition: color 0.15s;
+    }
+    .et-footer-back:hover { color: var(--et-graphite); }
+    .et-footer-back:disabled {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .et-footer-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .et-footer-hint {
+      font-size: 11px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+    .et-btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 20px;
+      background: var(--et-olive);
+      color: var(--et-bone);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .et-btn-primary:hover { background: var(--et-olive-dk); }
+    .et-btn-primary:disabled {
+      background: var(--et-border);
+      color: var(--et-stone);
+      cursor: default;
+    }
+    .et-btn-primary i { font-size: 14px; }
+
+    /* ── Review step ── */
+    .et-review-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      max-width: 560px;
+    }
+    .et-review-card {
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      padding: 14px 16px;
+    }
+    .et-review-card-label {
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+      font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .et-review-line {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      margin-bottom: 2px;
+    }
+    .et-review-sub {
+      font-size: 11px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+    .et-review-days {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .et-review-day-chip {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--et-olive);
+      background: #D8E8D0;
+      padding: 2px 7px;
+      border-radius: 3px;
+    }
+    .et-review-edit {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--et-stone);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      margin-top: 8px;
+      transition: color 0.15s;
+    }
+    .et-review-edit:hover { color: var(--et-olive); }
+
+    /* ── Mobile ── */
+    @media (max-width: 768px) {
+      .et-shell {
+        grid-template-columns: 1fr;
+      }
+      .et-panel { display: none; }
+      .et-step { padding: 32px 24px; }
+      .et-goal-grid { grid-template-columns: 1fr; max-width: 100%; }
+      .et-week-grid { grid-template-columns: repeat(7, 1fr); gap: 4px; }
+      .et-day-btn { width: 38px; height: 38px; }
+      .et-duration-input { width: 38px; }
+      .et-day-duration { width: 38px; }
+      .et-commitment-row { grid-template-columns: 1fr 80px 80px 28px; }
+      .et-footer { padding: 0 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="et-shell">
+
+  <!-- ── Left panel ── -->
+  <aside class="et-panel">
+    <div class="et-panel-logo">
+      <svg width="14" height="20" viewBox="0 0 160 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <polygon points="0,220 160,220 104,16 56,16" fill="#4A5C3E"/>
+        <polygon points="56,16 104,16 98,0 62,0" fill="#3A4C2E"/>
+        <polygon points="36,204 124,204 96,68 64,68" fill="#2C2C2A"/>
+        <line x1="80" y1="202" x2="100" y2="76" stroke="#4A5C3E" stroke-width="6" stroke-linecap="round"/>
+        <rect x="94" y="86" width="13" height="13" rx="1" fill="#4A5C3E" transform="rotate(45 100.5 92.5)"/>
+      </svg>
+      <span class="et-wordmark">eigentakt</span>
+    </div>
+
+    <div class="et-panel-strava">
+      <div class="et-strava-dot"></div>
+      <p class="et-strava-text">Connected as <span class="et-strava-name">Robin F.</span></p>
+    </div>
+
+    <nav class="et-panel-steps" id="panelSteps">
+      <div class="et-panel-step active" data-step="1">
+        <div class="et-step-node">01</div>
+        <div class="et-step-meta">
+          <p class="et-step-label">Your goal</p>
+          <p class="et-step-sub">What are you training toward?</p>
+        </div>
+      </div>
+      <div class="et-panel-step" data-step="2">
+        <div class="et-step-node">02</div>
+        <div class="et-step-meta">
+          <p class="et-step-label">Target event</p>
+          <p class="et-step-sub">Name, date, and type.</p>
+        </div>
+      </div>
+      <div class="et-panel-step" data-step="3">
+        <div class="et-step-node">03</div>
+        <div class="et-step-meta">
+          <p class="et-step-label">Your week</p>
+          <p class="et-step-sub">Days and duration available.</p>
+        </div>
+      </div>
+      <div class="et-panel-step" data-step="4">
+        <div class="et-step-node">04</div>
+        <div class="et-step-meta">
+          <p class="et-step-label">Fixed commitments</p>
+          <p class="et-step-sub">Recurring times that can't move.</p>
+        </div>
+      </div>
+    </nav>
+
+    <div class="et-panel-bottom">
+      <p class="et-panel-tagline">eigentakt reads four weeks of Strava data to calibrate starting load. This takes about 30 seconds after setup.</p>
+    </div>
+  </aside>
+
+  <!-- ── Right content ── -->
+  <div class="et-content">
+
+    <!-- Top bar -->
+    <div class="et-topbar">
+      <div class="et-progress-bar" id="progressBar">
+        <div class="et-progress-seg active" data-seg="1"></div>
+        <div class="et-progress-seg" data-seg="2"></div>
+        <div class="et-progress-seg" data-seg="3"></div>
+        <div class="et-progress-seg" data-seg="4"></div>
+      </div>
+      <span class="et-topbar-step-label" id="topbarLabel">Step 1 of 4</span>
+    </div>
+
+    <!-- Step viewport -->
+    <div class="et-step-viewport">
+
+      <!-- Step 1: Goal -->
+      <div class="et-step active" id="step-1">
+        <p class="et-step-eyebrow">Your goal</p>
+        <h1 class="et-step-title">What are you training toward?</h1>
+        <p class="et-step-desc">eigentakt structures your plan around a clear purpose. This shapes load, pacing, and progression.</p>
+
+        <div class="et-goal-grid">
+          <div class="et-goal-card" data-goal="event" onclick="selectGoal(this)">
+            <div class="et-goal-icon"><i class="ti ti-flag"></i></div>
+            <p class="et-goal-title">Target event</p>
+            <p class="et-goal-desc">A specific race, gran fondo, or event on a fixed date.</p>
+          </div>
+          <div class="et-goal-card" data-goal="base" onclick="selectGoal(this)">
+            <div class="et-goal-icon"><i class="ti ti-trending-up"></i></div>
+            <p class="et-goal-title">Build a base</p>
+            <p class="et-goal-desc">Structured aerobic development without a fixed deadline.</p>
+          </div>
+          <div class="et-goal-card" data-goal="return" onclick="selectGoal(this)">
+            <div class="et-goal-icon"><i class="ti ti-refresh"></i></div>
+            <p class="et-goal-title">Return to training</p>
+            <p class="et-goal-desc">Getting back to consistent training after a break.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Event details -->
+      <div class="et-step enter-right" id="step-2">
+        <p class="et-step-eyebrow">Target event</p>
+        <h1 class="et-step-title">Tell us about the event.</h1>
+        <p class="et-step-desc">This anchors your plan. eigentakt works backward from the date to calibrate build, peak, and taper phases.</p>
+
+        <div class="et-field-group">
+          <div class="et-field">
+            <label class="et-label" for="eventName">Event name</label>
+            <input class="et-input" id="eventName" type="text" placeholder="e.g. Flying Wheels, Cascade Classic" />
+          </div>
+          <div class="et-field-row cols-2">
+            <div class="et-field">
+              <label class="et-label" for="eventDate">Date</label>
+              <input class="et-input" id="eventDate" type="date" />
+            </div>
+            <div class="et-field">
+              <label class="et-label" for="eventType">Sport</label>
+              <div class="et-select-wrap">
+                <select class="et-select" id="eventType">
+                  <option value="">Select sport</option>
+                  <option value="cycling">Cycling</option>
+                  <option value="running">Running</option>
+                  <option value="triathlon">Triathlon</option>
+                  <option value="gravel">Gravel</option>
+                  <option value="mtb">Mountain bike</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div class="et-field">
+            <label class="et-label" for="eventDist">Approximate distance or duration <span style="color:#B0ACA6; font-weight:400;">(optional)</span></label>
+            <input class="et-input" id="eventDist" type="text" placeholder="e.g. 130 km, 5 hrs" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Weekly availability -->
+      <div class="et-step enter-right" id="step-3">
+        <p class="et-step-eyebrow">Your week</p>
+        <h1 class="et-step-title">When can you train?</h1>
+        <p class="et-step-desc">Select the days you're typically available, then set how long you have. eigentakt will work within this every week.</p>
+
+        <div class="et-week-grid" id="weekGrid">
+          <!-- Days rendered by JS -->
+        </div>
+        <p class="et-availability-note" id="availNote">No days selected yet. Select at least two days to continue.</p>
+      </div>
+
+      <!-- Step 4: Fixed commitments -->
+      <div class="et-step enter-right" id="step-4">
+        <p class="et-step-eyebrow">Fixed commitments</p>
+        <h1 class="et-step-title">What can't move?</h1>
+        <p class="et-step-desc">Add any recurring sessions that are fixed — a club ride, coached swim, or weekly long run that eigentakt should plan around rather than replace.</p>
+
+        <div class="et-commitment-empty" id="commitmentEmpty">
+          <p>No fixed commitments added. <em>If nothing is fixed, eigentakt has full flexibility.</em></p>
+        </div>
+
+        <div class="et-commitment-list" id="commitmentList" style="display:none;">
+          <div class="et-commitment-row header">
+            <span class="et-label">Day</span>
+            <span class="et-label">Time</span>
+            <span class="et-label">Duration</span>
+            <span></span>
+          </div>
+          <!-- Rows injected by JS -->
+        </div>
+
+        <button class="et-add-commitment" id="addCommitmentBtn" onclick="addCommitment()">
+          <i class="ti ti-plus"></i> Add commitment
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Footer nav -->
+    <div class="et-footer">
+      <button class="et-footer-back" id="backBtn" onclick="goBack()" disabled>
+        <i class="ti ti-arrow-left"></i> Back
+      </button>
+      <div class="et-footer-right">
+        <span class="et-footer-hint" id="footerHint"></span>
+        <button class="et-btn-primary" id="nextBtn" onclick="goNext()" disabled>
+          Continue <i class="ti ti-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── State ──
+  const state = {
+    currentStep: 1,
+    totalSteps: 4,
+    goal: null,            // 'event' | 'base' | 'return'
+    event: {},
+    days: {},              // { mon: 60, wed: 90, ... }
+    commitments: [],       // [{ day, time, duration }]
+  };
+
+  const days = [
+    { key: 'mon', label: 'Mon' },
+    { key: 'tue', label: 'Tue' },
+    { key: 'wed', label: 'Wed' },
+    { key: 'thu', label: 'Thu' },
+    { key: 'fri', label: 'Fri' },
+    { key: 'sat', label: 'Sat' },
+    { key: 'sun', label: 'Sun' },
+  ];
+
+  // ── Build week grid ──
+  function buildWeekGrid() {
+    const grid = document.getElementById('weekGrid');
+    grid.innerHTML = '';
+    days.forEach(d => {
+      const col = document.createElement('div');
+      col.className = 'et-day-toggle';
+      col.id = `day-toggle-${d.key}`;
+      col.innerHTML = `
+        <button class="et-day-btn" id="day-btn-${d.key}" onclick="toggleDay('${d.key}')">
+          <span class="et-day-initial">${d.label.charAt(0)}</span>
+        </button>
+        <div class="et-day-dur-wrap" id="dur-wrap-${d.key}">
+          <input class="et-duration-input" id="dur-${d.key}" type="number" min="15" max="360" step="15" value="60" onchange="updateDuration('${d.key}', this.value)" />
+          <div class="et-duration-unit">min</div>
+        </div>
+      `;
+      grid.appendChild(col);
+    });
+  }
+
+  function toggleDay(key) {
+    const btn = document.getElementById(`day-btn-${key}`);
+    const wrap = document.getElementById(`dur-wrap-${key}`);
+    const toggle = document.getElementById(`day-toggle-${key}`);
+    if (state.days[key] !== undefined) {
+      delete state.days[key];
+      btn.classList.remove('active');
+      toggle.classList.remove('active');
+    } else {
+      state.days[key] = 60;
+      btn.classList.add('active');
+      toggle.classList.add('active');
+    }
+    updateAvailNote();
+    updateNav();
+  }
+
+  function updateDuration(key, val) {
+    if (state.days[key] !== undefined) {
+      state.days[key] = parseInt(val) || 60;
+    }
+  }
+
+  function updateAvailNote() {
+    const count = Object.keys(state.days).length;
+    const note = document.getElementById('availNote');
+    if (count === 0) {
+      note.textContent = 'No days selected yet. Select at least two days to continue.';
+    } else if (count === 1) {
+      note.textContent = '1 day selected. Select at least one more.';
+    } else {
+      const total = Object.values(state.days).reduce((a, b) => a + b, 0);
+      const hrs = Math.floor(total / 60);
+      const mins = total % 60;
+      const timeStr = hrs > 0 ? (mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`) : `${mins} min`;
+      note.textContent = `${count} days selected — ${timeStr} of training time per week.`;
+    }
+  }
+
+  // ── Commitments ──
+  let commitmentCount = 0;
+
+  function addCommitment() {
+    commitmentCount++;
+    const id = `c-${commitmentCount}`;
+    const entry = { id, day: 'mon', time: '07:00', duration: '60' };
+    state.commitments.push(entry);
+
+    document.getElementById('commitmentEmpty').style.display = 'none';
+    document.getElementById('commitmentList').style.display = 'flex';
+
+    const list = document.getElementById('commitmentList');
+
+    // Add header if first row
+    if (state.commitments.length === 1) {
+      const header = document.createElement('div');
+      header.className = 'et-commitment-row header';
+      header.innerHTML = `
+        <span class="et-label">Day</span>
+        <span class="et-label">Time</span>
+        <span class="et-label">Duration</span>
+        <span></span>
+      `;
+    }
+
+    const row = document.createElement('div');
+    row.className = 'et-commitment-row';
+    row.id = `row-${id}`;
+    row.innerHTML = `
+      <div class="et-select-wrap">
+        <select class="et-select" style="height:32px;font-size:12px;" onchange="updateCommitment('${id}', 'day', this.value)">
+          <option value="mon">Monday</option>
+          <option value="tue">Tuesday</option>
+          <option value="wed">Wednesday</option>
+          <option value="thu">Thursday</option>
+          <option value="fri">Friday</option>
+          <option value="sat">Saturday</option>
+          <option value="sun">Sunday</option>
+        </select>
+      </div>
+      <input class="et-input" type="time" style="height:32px;font-size:12px;" value="07:00" onchange="updateCommitment('${id}', 'time', this.value)" />
+      <div class="et-select-wrap">
+        <select class="et-select" style="height:32px;font-size:12px;" onchange="updateCommitment('${id}', 'duration', this.value)">
+          <option value="30">30 min</option>
+          <option value="45">45 min</option>
+          <option value="60" selected>1 hr</option>
+          <option value="90">1.5 hr</option>
+          <option value="120">2 hr</option>
+          <option value="180">3 hr</option>
+          <option value="240">4 hr</option>
+        </select>
+      </div>
+      <button class="et-remove-btn" onclick="removeCommitment('${id}')">
+        <i class="ti ti-x"></i>
+      </button>
+    `;
+    list.appendChild(row);
+  }
+
+  function updateCommitment(id, field, value) {
+    const entry = state.commitments.find(c => c.id === id);
+    if (entry) entry[field] = value;
+  }
+
+  function removeCommitment(id) {
+    state.commitments = state.commitments.filter(c => c.id !== id);
+    const row = document.getElementById(`row-${id}`);
+    if (row) row.remove();
+    if (state.commitments.length === 0) {
+      document.getElementById('commitmentEmpty').style.display = '';
+      document.getElementById('commitmentList').style.display = 'none';
+    }
+  }
+
+  // ── Goal selection ──
+  function selectGoal(card) {
+    document.querySelectorAll('.et-goal-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    state.goal = card.dataset.goal;
+    updateNav();
+  }
+
+  // ── Navigation ──
+  function getEffectiveSteps() {
+    // Skip step 2 if goal is not 'event'
+    if (state.goal && state.goal !== 'event') {
+      return [1, 3, 4];
+    }
+    return [1, 2, 3, 4];
+  }
+
+  function getNextStep() {
+    const steps = getEffectiveSteps();
+    const idx = steps.indexOf(state.currentStep);
+    return idx < steps.length - 1 ? steps[idx + 1] : null;
+  }
+
+  function getPrevStep() {
+    const steps = getEffectiveSteps();
+    const idx = steps.indexOf(state.currentStep);
+    return idx > 0 ? steps[idx - 1] : null;
+  }
+
+  function isStepValid(step) {
+    switch (step) {
+      case 1: return !!state.goal;
+      case 2: return true; // event details optional
+      case 3: return Object.keys(state.days).length >= 2;
+      case 4: return true;
+      default: return false;
+    }
+  }
+
+  function updateNav() {
+    const next = getNextStep();
+    const prev = getPrevStep();
+    const nextBtn = document.getElementById('nextBtn');
+    const backBtn = document.getElementById('backBtn');
+    const hint = document.getElementById('footerHint');
+
+    backBtn.disabled = !prev;
+
+    const valid = isStepValid(state.currentStep);
+    nextBtn.disabled = !valid;
+
+    if (state.currentStep === 4) {
+      nextBtn.innerHTML = 'Build my plan <i class="ti ti-wand"></i>';
+    } else {
+      nextBtn.innerHTML = 'Continue <i class="ti ti-arrow-right"></i>';
+    }
+
+    // Hint text
+    if (state.currentStep === 1 && !state.goal) {
+      hint.textContent = 'Select a goal to continue.';
+    } else if (state.currentStep === 3 && Object.keys(state.days).length < 2) {
+      hint.textContent = 'Select at least two training days.';
+    } else {
+      hint.textContent = '';
+    }
+
+    // Update progress bar
+    const steps = getEffectiveSteps();
+    const progress = (steps.indexOf(state.currentStep) + 1) / steps.length;
+    document.querySelectorAll('.et-progress-seg').forEach((seg, i) => {
+      const segStep = i + 1;
+      seg.className = 'et-progress-seg';
+      if (i < steps.indexOf(state.currentStep)) seg.classList.add('done');
+      else if (i === steps.indexOf(state.currentStep)) seg.classList.add('active');
+    });
+
+    // Update top label
+    const idx = steps.indexOf(state.currentStep);
+    document.getElementById('topbarLabel').textContent = `Step ${idx + 1} of ${steps.length}`;
+
+    // Update left panel
+    document.querySelectorAll('.et-panel-step').forEach(ps => {
+      const s = parseInt(ps.dataset.step);
+      ps.className = 'et-panel-step';
+      if (s === state.currentStep) ps.classList.add('active');
+      else if (steps.indexOf(s) < steps.indexOf(state.currentStep)) ps.classList.add('complete');
+    });
+  }
+
+  function transitionTo(toStep, direction) {
+    const fromEl = document.getElementById(`step-${state.currentStep}`);
+    const toEl = document.getElementById(`step-${toStep}`);
+
+    // Exit current
+    fromEl.classList.remove('active');
+    fromEl.classList.add(direction === 'forward' ? 'exit-left' : 'exit-right');
+
+    // Position incoming
+    toEl.classList.remove('enter-right', 'enter-left', 'exit-left', 'exit-right');
+    toEl.classList.add(direction === 'forward' ? 'enter-right' : 'enter-left');
+
+    // Force reflow
+    toEl.offsetHeight;
+
+    // Animate in
+    requestAnimationFrame(() => {
+      toEl.classList.remove('enter-right', 'enter-left');
+      toEl.classList.add('active');
+    });
+
+    // Clean up exit class after transition
+    setTimeout(() => {
+      fromEl.classList.remove('exit-left', 'exit-right');
+    }, 400);
+
+    state.currentStep = toStep;
+    updateNav();
+  }
+
+  function goNext() {
+    if (!isStepValid(state.currentStep)) return;
+    const next = getNextStep();
+    if (next) {
+      transitionTo(next, 'forward');
+    } else {
+      // Final step — submit
+      submitOnboarding();
+    }
+  }
+
+  function goBack() {
+    const prev = getPrevStep();
+    if (prev) transitionTo(prev, 'back');
+  }
+
+  function submitOnboarding() {
+    const btn = document.getElementById('nextBtn');
+    btn.innerHTML = 'Building your plan... <i class="ti ti-loader"></i>';
+    btn.disabled = true;
+    // In production: POST to /api/onboarding, then redirect to /calendar
+    setTimeout(() => {
+      btn.innerHTML = 'Opening your plan <i class="ti ti-arrow-right"></i>';
+    }, 2000);
+  }
+
+  // ── Init ──
+  buildWeekGrid();
+  updateNav();
+</script>
+
+</body>
+</html>

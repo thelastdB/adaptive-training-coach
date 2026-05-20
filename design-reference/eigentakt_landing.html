@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eigentakt</title>
+
+  <!--
+    EIGENTAKT LANDING PAGE — DESIGN REFERENCE v1
+    =============================================
+    This file is the approved design baseline for the eigentakt landing page.
+    Use it as the visual and code source of truth for implementation.
+
+    BRAND NOTES FOR IMPLEMENTATION
+    --------------------------------
+    - "eigentakt" is NEVER capitalized unless it begins a sentence. Enforce this
+      in templates, meta tags, page titles, alt text, and all copy.
+    - The page title should be: eigentakt — your rhythm
+    - The mark SVG is hand-authored. Do not substitute an image or alter the paths.
+    - CTA background: #4E6242 (olive). Verify this renders correctly in all browsers.
+      It should be a solid dark green button with bone (#F3F1EB) text.
+
+    MARK SVG PATHS (locked)
+    -----------------------
+    viewBox: 0 0 256 256
+    Outer triangle: M128 38L192 220H64L128 38Z   fill: #F3F1EB (on dark) / #171715 (on light)
+    Inner void:     M132 62L158 206H110L132 62Z  fill: background color (cutout)
+
+    COLOR TOKENS
+    ------------
+    --et-graphite: #171715   (primary text, dark backgrounds)
+    --et-olive:    #4E6242   (eyebrow, step numbers, step dividers, CTA)
+    --et-bone:     #F3F1EB   (page background, light text on dark)
+    --et-stone:    #B6B0A4   (secondary text, borders, muted labels)
+
+    TYPOGRAPHY
+    ----------
+    Primary:   IBM Plex Sans — Regular (400), Medium (500), SemiBold (600)
+    Editorial: Instrument Serif — used sparingly (not currently used on this page)
+    Import:    https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap
+
+    GREEN USAGE
+    -----------
+    #4E6242 appears on:
+      - Eyebrow label ("your rhythm")
+      - Step numbers (01, 02, 03, 04)
+      - Step divider lines
+      - CTA button background
+    It does NOT appear on body copy, feature titles, or decorative elements.
+  -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens ── */
+    :root {
+      --et-graphite: #171715;
+      --et-olive:    #4E6242;
+      --et-bone:     #F3F1EB;
+      --et-stone:    #B6B0A4;
+    }
+
+    /* ── Base ── */
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--et-bone);
+      color: var(--et-graphite);
+    }
+
+    /* ── Nav ── */
+    .et-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 48px;
+      border-bottom: 0.5px solid var(--et-stone);
+      background: var(--et-bone);
+    }
+    .et-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .et-wordmark {
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--et-graphite);
+    }
+
+    /* ── Hero ── */
+    .et-hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 560px;
+    }
+    .et-hero-left {
+      padding: 72px 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 0.5px solid var(--et-stone);
+    }
+    .et-hero-right {
+      position: relative;
+      overflow: hidden;
+      background: var(--et-stone);
+    }
+    .et-hero-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: 70% center;
+      display: block;
+      filter: saturate(0.7);
+    }
+
+    /* ── Hero copy ── */
+    .et-eyebrow {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--et-olive);
+      margin-bottom: 20px;
+      font-weight: 500;
+    }
+    .et-h1 {
+      font-size: 40px;
+      font-weight: 500;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      color: var(--et-graphite);
+      margin-bottom: 24px;
+    }
+    .et-body {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--et-stone);
+      max-width: 400px;
+      margin-bottom: 40px;
+    }
+
+    /* ── CTA ── */
+    /* NOTE: background-color must be #4E6242. Verify solid green renders in browser. */
+    .et-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background-color: #4E6242;
+      color: var(--et-bone);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 13px 24px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .et-cta:hover {
+      background-color: #3d4f34;
+    }
+
+    /* ── Features ── */
+    .et-features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-top: 0.5px solid var(--et-stone);
+    }
+    .et-feature {
+      padding: 40px;
+      border-right: 0.5px solid var(--et-stone);
+    }
+    .et-feature:last-child {
+      border-right: none;
+    }
+    .et-feature-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      margin-bottom: 8px;
+    }
+    .et-feature-body {
+      font-size: 13px;
+      line-height: 1.65;
+      color: var(--et-stone);
+    }
+
+    /* ── How it works ── */
+    .et-how {
+      padding: 64px 48px;
+      border-top: 0.5px solid var(--et-stone);
+    }
+    .et-section-label {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+      font-weight: 500;
+      margin-bottom: 40px;
+    }
+    .et-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 32px;
+    }
+    .et-step-num {
+      font-size: 11px;
+      color: var(--et-olive);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+    .et-step-divider {
+      width: 24px;
+      height: 0.5px;
+      background: var(--et-olive);
+      margin-bottom: 16px;
+    }
+    .et-step-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      margin-bottom: 6px;
+    }
+    .et-step-body {
+      font-size: 13px;
+      color: var(--et-stone);
+      line-height: 1.6;
+    }
+
+    /* ── Footer ── */
+    .et-footer {
+      padding: 24px 48px;
+      border-top: 0.5px solid var(--et-stone);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .et-footer-copy {
+      font-size: 12px;
+      color: var(--et-stone);
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="et-nav">
+    <div class="et-logo">
+      <!--
+        MARK: Do not alter these paths or viewBox.
+        On bone background: outer fill #171715, void fill #F3F1EB.
+        On dark background: outer fill #F3F1EB, void fill background color.
+      -->
+      <svg width="28" height="28" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M128 38L192 220H64L128 38Z" fill="#171715"/>
+        <path d="M132 62L158 206H110L132 62Z" fill="#F3F1EB"/>
+      </svg>
+      <span class="et-wordmark">eigentakt</span>
+    </div>
+  </nav>
+
+  <main>
+
+    <section class="et-hero">
+      <div class="et-hero-left">
+        <p class="et-eyebrow">your rhythm</p>
+        <h1 class="et-h1">Training<br>that fits<br>your life.</h1>
+        <p class="et-body">
+          eigentakt connects to your Strava data and builds a weekly training
+          plan around your schedule, fitness, and goals — then adapts when
+          things change.
+        </p>
+        <div>
+          <a href="#" class="et-cta">Connect with Strava →</a>
+        </div>
+      </div>
+      <div class="et-hero-right">
+        <!-- Replace src with production asset path -->
+        <img
+          class="et-hero-img"
+          src="hero.jpg"
+          alt="athlete lacing shoes on steps in early morning light"
+        />
+      </div>
+    </section>
+
+    <section class="et-features">
+      <div class="et-feature">
+        <p class="et-feature-title">Built around your goals</p>
+        <p class="et-feature-body">
+          Whether you're training for a specific event, building a base, or
+          getting back into a rhythm — eigentakt plans toward what matters
+          to you.
+        </p>
+      </div>
+      <div class="et-feature">
+        <p class="et-feature-title">Fits your week</p>
+        <p class="et-feature-body">
+          Tell it which days you have, for how long, and what's fixed. It
+          accounts for weather, too — so your plan reflects the week you're
+          actually facing.
+        </p>
+      </div>
+      <div class="et-feature">
+        <p class="et-feature-title">Built from your data</p>
+        <p class="et-feature-body">
+          eigentakt reads your Strava history — rides, runs, everything —
+          and uses it to calibrate load, recovery, and progression to where
+          you actually are.
+        </p>
+      </div>
+    </section>
+
+    <section class="et-how">
+      <p class="et-section-label">How it works</p>
+      <div class="et-steps">
+        <div>
+          <p class="et-step-num">01</p>
+          <div class="et-step-divider"></div>
+          <p class="et-step-title">Connect Strava</p>
+          <p class="et-step-body">eigentakt reads your activity history — rides, runs, everything.</p>
+        </div>
+        <div>
+          <p class="et-step-num">02</p>
+          <div class="et-step-divider"></div>
+          <p class="et-step-title">Set your week</p>
+          <p class="et-step-body">Tell us which days you can train and for how long. Add any fixed commitments.</p>
+        </div>
+        <div>
+          <p class="et-step-num">03</p>
+          <div class="et-step-divider"></div>
+          <p class="et-step-title">Get your plan</p>
+          <p class="et-step-body">A structured weekly plan, specific to you. Move activities around, edit what doesn't work.</p>
+        </div>
+        <div>
+          <p class="et-step-num">04</p>
+          <div class="et-step-divider"></div>
+          <p class="et-step-title">Evaluate and refine</p>
+          <p class="et-step-body">Make changes and get instant feedback. Flags where something's off — weather, load, recovery.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="et-footer">
+    <p class="et-footer-copy">© 2026 eigentakt</p>
+    <p class="et-footer-copy">eigentakt.app</p>
+  </footer>
+
+</body>
+</html>

@@ -1,0 +1,13 @@
+<svg width="760" height="220" viewBox="0 0 760 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="760" height="220" fill="#171715"/>
+  <path d="M96 28L150 196H42L96 28Z" fill="#F3F1EB"/>
+  <path d="M100 52L122 184H84L100 52Z" fill="#171715"/>
+  <text x="210" y="132"
+        font-family="IBM Plex Sans, sans-serif"
+        font-size="64"
+        font-weight="500"
+        letter-spacing="-1.5"
+        fill="#F3F1EB">
+    eigentakt
+  </text>
+</svg>

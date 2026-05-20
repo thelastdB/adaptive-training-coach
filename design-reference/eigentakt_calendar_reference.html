@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eigentakt — weekly plan</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+  <!-- Inline SVG icon system — Tabler outline style, 24x24 viewBox, stroke-only -->
+  <style>
+    .ic {
+      display: inline-block;
+      flex-shrink: 0;
+      vertical-align: middle;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .ic-sm { width: 12px; height: 12px; }
+    .ic-md { width: 15px; height: 15px; }
+    .ic-lg { width: 18px; height: 18px; }
+    .ic-xs { width: 9px;  height: 9px;  }
+  </style>
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens — from eigentakt_calendar_reference.html (ground truth for app) ── */
+    :root {
+      --et-graphite: #2C2C2A;
+      --et-olive:    #4A5C3E;
+      --et-olive-dk: #3A4C2E;
+      --et-bone:     #F5F2EC;
+      --et-stone:    #6B6B67;
+      --et-border:   #D8D4CC;
+      --et-card:     #FFFFFF;
+      --et-surface:  #EDE9E2;
+      --et-amber:    #8A6020;
+      --et-red:      #8B3A3A;
+    }
+
+    /* ── Base ── */
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--et-bone);
+      color: var(--et-graphite);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    .et-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 46px;
+      background: var(--et-bone);
+      border-bottom: 0.5px solid var(--et-border);
+    }
+    .et-topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .et-wordmark {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--et-graphite);
+    }
+    .et-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .et-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #D4CFC4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--et-stone);
+    }
+
+    /* ── Layout ── */
+    .et-layout {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      height: calc(100vh - 46px);
+    }
+
+    /* ── Sidebar ── */
+    .et-sidebar {
+      border-right: 0.5px solid var(--et-border);
+      background: var(--et-bone);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 2px;
+      position: relative;
+      z-index: 20;
+    }
+    .et-sidebar-item {
+      position: relative;
+      width: 36px;
+    }
+    .et-sidebar-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      color: var(--et-stone);
+      cursor: pointer;
+      border: none;
+      background: none;
+      transition: background 0.1s, color 0.1s;
+    }
+    .et-sidebar-icon.active {
+      background: var(--et-surface);
+      color: var(--et-graphite);
+    }
+    .et-sidebar-icon:hover {
+      background: var(--et-surface);
+      color: var(--et-olive);
+    }
+    .et-sidebar-tooltip {
+      position: absolute;
+      left: 44px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--et-graphite);
+      color: var(--et-bone);
+      font-size: 11px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      white-space: nowrap;
+      padding: 4px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 100;
+    }
+    .et-sidebar-item:hover .et-sidebar-tooltip { opacity: 1; }
+    .et-sidebar-divider {
+      width: 24px;
+      height: 0.5px;
+      background: var(--et-border);
+      margin: 6px 0;
+    }
+    .et-sidebar-bottom {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .et-event-dot {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--et-olive);
+    }
+
+    /* ── Main ── */
+    .et-main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    .et-main-header {
+      padding: 8px 20px;
+      border-bottom: 0.5px solid var(--et-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .et-week-nav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .et-week-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .et-week-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--et-graphite);
+    }
+    .et-week-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .et-week-sub {
+      font-size: 11px;
+      color: var(--et-stone);
+    }
+    .et-focus-badge {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      background: #D8E8D0;
+      padding: 1px 6px;
+      border-radius: 3px;
+    }
+    .et-header-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── Buttons ── */
+    .et-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: 'IBM Plex Sans', sans-serif;
+      border: 0.5px solid #A8A4A0;
+      background: var(--et-surface);
+      color: var(--et-graphite);
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .et-btn:hover { background: #E0DCD4; }
+    .et-btn i { font-size: 12px; }
+    .et-btn-icon { padding: 5px 7px; }
+
+    /* ── Split button ── */
+    .et-split-btn {
+      display: inline-flex;
+      border-radius: 4px;
+      position: relative;
+    }
+    .et-split-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 500;
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--et-olive);
+      color: var(--et-bone);
+      border: 0.5px solid var(--et-olive-dk);
+      border-right: none;
+      border-radius: 4px 0 0 4px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .et-split-main:hover { background: var(--et-olive-dk); }
+    .et-split-main i { font-size: 12px; }
+    .et-split-arrow {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      background: var(--et-olive-dk);
+      color: var(--et-bone);
+      border: 0.5px solid #2E3E24;
+      border-radius: 0 4px 4px 0;
+      cursor: pointer;
+      font-size: 11px;
+      transition: background 0.1s;
+    }
+    .et-split-arrow:hover { background: #2E3E24; }
+    .et-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 0;
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      min-width: 220px;
+      z-index: 100;
+      overflow: hidden;
+      display: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    }
+    .et-split-btn.open .et-dropdown { display: block; }
+    .et-dropdown-item {
+      display: flex;
+      flex-direction: column;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 0.5px solid #F0EDE6;
+      transition: background 0.08s;
+    }
+    .et-dropdown-item:last-child { border-bottom: none; }
+    .et-dropdown-item:hover { background: var(--et-bone); }
+    .et-dropdown-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .et-dropdown-label i { font-size: 13px; color: var(--et-olive); }
+    .et-dropdown-label.destructive { color: var(--et-red); }
+    .et-dropdown-label.destructive i { color: var(--et-red); }
+    .et-dropdown-sub {
+      font-size: 10px;
+      color: var(--et-stone);
+      margin-top: 2px;
+      padding-left: 19px;
+    }
+    .et-dropdown-divider {
+      height: 0.5px;
+      background: var(--et-border);
+    }
+
+    /* ── Assessment banner ── */
+    .et-assessment {
+      margin: 10px 20px 0;
+      padding: 8px 14px;
+      background: var(--et-surface);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .et-assessment-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+    }
+    .et-assessment-signal {
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      flex: 1;
+    }
+    .et-signal-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 3px;
+    }
+    .et-signal-green { background: var(--et-olive); }
+    .et-signal-amber { background: var(--et-amber); }
+    .et-signal-red   { background: var(--et-red); }
+    .et-signal-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--et-graphite);
+      letter-spacing: 0.02em;
+    }
+    .et-signal-text {
+      font-size: 10px;
+      color: #4A4A46;
+      line-height: 1.35;
+      margin-top: 1px;
+    }
+
+    /* ── Grid ── */
+    .et-grid-wrap {
+      flex: 1;
+      overflow: hidden;
+      padding: 12px 20px 16px;
+    }
+    .et-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 7px;
+      height: 100%;
+    }
+    .et-day-col {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-width: 0;
+    }
+    .et-day-header {
+      padding: 4px 4px 6px;
+      text-align: center;
+      border-bottom: 0.5px solid var(--et-border);
+      margin-bottom: 2px;
+      flex-shrink: 0;
+    }
+    .et-day-name {
+      font-size: 10px;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+      font-weight: 500;
+    }
+    .et-day-date {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      line-height: 1.25;
+    }
+    .et-day-date.today { color: var(--et-olive); }
+
+    /* ── Cards ── */
+    .et-card {
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      padding: 9px 10px;
+      cursor: grab;
+      position: relative;
+      transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+    .et-card:hover {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    /* Drag states */
+    .et-card.dragging {
+      opacity: 0.5;
+      cursor: grabbing;
+      box-shadow: none;
+    }
+    .et-card.drag-ghost {
+      position: fixed;
+      pointer-events: none;
+      z-index: 1000;
+      transform: rotate(1.5deg) scale(1.02);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+      opacity: 0.95;
+      min-width: 120px;
+    }
+    .et-day-col.drop-compatible {
+      border-radius: 8px;
+      outline: 1.5px solid var(--et-olive);
+      background: rgba(74,92,62,0.04);
+    }
+    .et-day-col.drop-incompatible {
+      border-radius: 8px;
+      outline: 1.5px solid var(--et-amber);
+      background: rgba(138,96,32,0.04);
+    }
+
+    .et-card.stale { border: 1px dashed var(--et-amber); }
+    .et-card.fixed { border: 1px solid var(--et-olive); }
+
+    .et-card-type {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 4px;
+    }
+    .et-card-icon {
+      font-size: 12px;
+      color: var(--et-olive);
+    }
+    .et-card-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--et-graphite);
+      letter-spacing: 0.01em;
+    }
+    .et-card-meta {
+      font-size: 10px;
+      color: var(--et-stone);
+      margin-bottom: 4px;
+      font-variant-numeric: tabular-nums;
+    }
+    .et-card-desc {
+      font-size: 10px;
+      color: #4A4A46;
+      line-height: 1.45;
+      font-family: 'Instrument Serif', Georgia, serif;
+      margin-bottom: 1px;
+    }
+    .et-card-desc.stale { color: #A8A8A4; }
+
+    .et-intensity {
+      display: inline-block;
+      font-size: 9px;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      letter-spacing: 0.02em;
+    }
+    .et-intensity-easy     { background: #D0E8C8; color: #1E4A14; }
+    .et-intensity-moderate { background: #E8D8A8; color: #5A3A08; }
+    .et-intensity-hard     { background: #E8C0C0; color: #5A1A1A; }
+
+    .et-card-weather {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 9px;
+      color: var(--et-stone);
+      margin-top: 5px;
+      padding-top: 5px;
+      border-top: 0.5px solid var(--et-surface);
+    }
+
+    /* Card actions: #2C2C2A at rest, no chrome */
+    .et-card-actions {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+      padding-top: 5px;
+      border-top: 0.5px solid var(--et-surface);
+    }
+    .et-card-btn {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #2C2C2A;
+      background: none;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      padding: 0;
+      transition: background 0.1s;
+    }
+    .et-card-btn:hover { background: var(--et-surface); }
+    .et-card-btn i { font-size: 13px; }
+    .et-card-btn.stale-btn { color: var(--et-amber); }
+    .et-card-btn.stale-btn:hover { background: #F8EED8; }
+
+    /* Corner badges */
+    .et-card-corner {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+    }
+    .et-stale-badge {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--et-amber);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .et-lock-icon {
+      font-size: 10px;
+      color: var(--et-olive);
+    }
+
+    /* Flag */
+    .et-flag {
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
+      margin-top: 5px;
+      padding: 4px 6px;
+      background: #F8EED8;
+      border-radius: 3px;
+      border: 0.5px solid #C8A060;
+    }
+    .et-flag-text {
+      font-size: 9px;
+      color: #6A4010;
+      line-height: 1.4;
+    }
+
+    /* Empty + rest slots */
+    .et-empty-slot {
+      border: 0.5px dashed #B8B4AC;
+      border-radius: 6px;
+      padding: 12px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      cursor: pointer;
+      flex: 1;
+      min-height: 72px;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .et-empty-slot:hover {
+      background: var(--et-surface);
+      border-color: #A8A4A0;
+    }
+    .et-empty-add {
+      font-size: 9px;
+      color: var(--et-stone);
+      text-align: center;
+      line-height: 1.4;
+      font-family: 'IBM Plex Sans', sans-serif;
+    }
+    .et-rest-slot {
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      min-height: 48px;
+    }
+    .et-rest-label {
+      font-size: 9px;
+      color: #A8A4A0;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    /* ── Drag-and-drop demo states overlay ── */
+    .et-demo-controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      z-index: 200;
+    }
+    .et-demo-btn {
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 5px 10px;
+      border-radius: 4px;
+      border: 0.5px solid var(--et-border);
+      background: var(--et-card);
+      color: var(--et-graphite);
+      cursor: pointer;
+      transition: background 0.1s;
+      white-space: nowrap;
+    }
+    .et-demo-btn:hover { background: var(--et-surface); }
+    .et-demo-btn.active { background: var(--et-surface); border-color: var(--et-stone); }
+
+    /* ── Empty week state ── */
+    .et-empty-week-overlay {
+      position: absolute;
+      inset: 0;
+      background: var(--et-bone);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 50;
+    }
+    .et-empty-week-overlay.visible { display: flex; }
+    .et-empty-week-mark {
+      opacity: 0.25;
+    }
+    .et-empty-week-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      text-align: center;
+    }
+    .et-empty-week-sub {
+      font-size: 12px;
+      color: var(--et-stone);
+      text-align: center;
+      max-width: 280px;
+      line-height: 1.6;
+      font-family: 'Instrument Serif', Georgia, serif;
+      font-style: italic;
+    }
+    .et-generate-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 18px;
+      background: var(--et-olive);
+      color: var(--et-bone);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s;
+      margin-top: 4px;
+    }
+    .et-generate-cta:hover { background: var(--et-olive-dk); }
+
+    /* Drag state indicator card */
+    .et-drag-demo-card {
+      position: fixed;
+      top: 140px;
+      left: 50%;
+      transform: translateX(-50%) rotate(1.5deg);
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      padding: 9px 10px;
+      width: 150px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+      z-index: 300;
+      display: none;
+      pointer-events: none;
+    }
+    .et-drag-demo-card.visible { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════
+       INLINE SVG ICON DEFS
+       All icons are Tabler outline style: 24x24 viewBox,
+       stroke-only, no fill. Used via <use xlink:href>.
+  ═══════════════════════════════════════════════════ -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+    <!-- calendar-week -->
+    <symbol id="ic-calendar-week" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <rect x="4" y="5" width="16" height="16" rx="2"/>
+      <line x1="16" y1="3" x2="16" y2="7"/>
+      <line x1="8" y1="3" x2="8" y2="7"/>
+      <line x1="4" y1="11" x2="20" y2="11"/>
+      <line x1="4" y1="16" x2="6" y2="16"/>
+      <line x1="4" y1="19" x2="6" y2="19"/>
+      <line x1="9" y1="16" x2="20" y2="16"/>
+      <line x1="9" y1="19" x2="20" y2="19"/>
+    </symbol>
+    <!-- history / clock-rewind -->
+    <symbol id="ic-history" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <polyline points="12 8 12 12 14 14"/>
+      <path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/>
+    </symbol>
+    <!-- target -->
+    <symbol id="ic-target" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="1"/>
+      <circle cx="12" cy="12" r="5"/>
+      <circle cx="12" cy="12" r="9"/>
+    </symbol>
+    <!-- clock -->
+    <symbol id="ic-clock" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="9"/>
+      <polyline points="12 7 12 12 15 15"/>
+    </symbol>
+    <!-- user -->
+    <symbol id="ic-user" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="7" r="4"/>
+      <path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/>
+    </symbol>
+    <!-- flag -->
+    <symbol id="ic-flag" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <line x1="5" y1="5" x2="5" y2="21"/>
+      <line x1="19" y1="5" x2="5" y2="5"/>
+      <line x1="5" y1="13" x2="19" y2="13"/>
+      <polyline points="19 5 15 9 19 13"/>
+    </symbol>
+    <!-- chevron-left -->
+    <symbol id="ic-chevron-left" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <polyline points="15 6 9 12 15 18"/>
+    </symbol>
+    <!-- chevron-right -->
+    <symbol id="ic-chevron-right" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <polyline points="9 6 15 12 9 18"/>
+    </symbol>
+    <!-- chevron-down -->
+    <symbol id="ic-chevron-down" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <polyline points="6 9 12 15 18 9"/>
+    </symbol>
+    <!-- refresh -->
+    <symbol id="ic-refresh" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/>
+      <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>
+    </symbol>
+    <!-- wand (magic) -->
+    <symbol id="ic-wand" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <polyline points="6 21 21 6"/>
+      <line x1="15" y1="6" x2="19.5" y2="2.5"/>
+      <path d="M18 22l3.35 -3.35"/>
+      <path d="M10 6l-1.5 -1.5"/>
+      <path d="M21 15l-1.5 -1.5"/>
+      <path d="M3 12l1.5 -1.5"/>
+    </symbol>
+    <!-- sparkles -->
+    <symbol id="ic-sparkles" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z"/>
+      <path d="M6 12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z"/>
+      <path d="M12 2a3 3 0 0 1 3 3a3 3 0 0 1 3 -3a3 3 0 0 1 -3 -3a3 3 0 0 1 -3 3z"/>
+    </symbol>
+    <!-- trash -->
+    <symbol id="ic-trash" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <line x1="4" y1="7" x2="20" y2="7"/>
+      <line x1="10" y1="11" x2="10" y2="17"/>
+      <line x1="14" y1="11" x2="14" y2="17"/>
+      <path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/>
+      <path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/>
+    </symbol>
+    <!-- edit (pencil) -->
+    <symbol id="ic-edit" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M9 7h-3a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-3"/>
+      <path d="M9 15h3l8.5 -8.5a1.5 1.5 0 0 0 -3 -3l-8.5 8.5v3"/>
+      <line x1="16" y1="5" x2="19" y2="8"/>
+    </symbol>
+    <!-- sun -->
+    <symbol id="ic-sun" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="12" r="4"/>
+      <line x1="12" y1="2" x2="12" y2="4"/>
+      <line x1="12" y1="20" x2="12" y2="22"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="2" y1="12" x2="4" y2="12"/>
+      <line x1="20" y1="12" x2="22" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </symbol>
+    <!-- cloud-rain -->
+    <symbol id="ic-cloud-rain" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M7 18a4.6 4.4 0 0 1 0 -9a5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7"/>
+      <line x1="11" y1="13" x2="10" y2="18"/>
+      <line x1="15" y1="13" x2="14" y2="18"/>
+    </symbol>
+    <!-- cloud -->
+    <symbol id="ic-cloud" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M6.657 18c-2.572 0 -4.657 -2.007 -4.657 -4.483c0 -2.475 2.085 -4.482 4.657 -4.482c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 .986c1.488 1.18 2.162 3.007 1.77 4.769h.99c1.913 0 3.464 1.56 3.464 3.486c0 1.927 -1.551 3.487 -3.465 3.487h-11.878"/>
+    </symbol>
+    <!-- bike -->
+    <symbol id="ic-bike" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="5" cy="15" r="3"/>
+      <circle cx="19" cy="15" r="3"/>
+      <polyline points="3.5 11 5 15 9.5 10 12 15"/>
+      <line x1="9" y1="6" x2="14" y2="6"/>
+      <line x1="12" y1="6" x2="12" y2="15"/>
+      <path d="M16 9.7v-3.7h2"/>
+    </symbol>
+    <!-- run (person running) -->
+    <symbol id="ic-run" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="13" cy="4" r="1"/>
+      <path d="M4 17l5 -5"/>
+      <path d="M13 17v-6l-3 -2"/>
+      <path d="M8 12l1 -5l4 1l3 3h3"/>
+      <path d="M13 11l1 5l3 1"/>
+    </symbol>
+    <!-- body-scan / person outline -->
+    <symbol id="ic-body" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <circle cx="12" cy="5" r="2"/>
+      <path d="M10 22v-5"/>
+      <path d="M14 22v-5"/>
+      <path d="M6 9a3 3 0 0 1 3 -3h6a3 3 0 0 1 3 3v3l-2 3H8l-2 -3z"/>
+      <line x1="12" y1="12" x2="12" y2="17"/>
+    </symbol>
+    <!-- lock -->
+    <symbol id="ic-lock" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <rect x="5" y="11" width="14" height="10" rx="2"/>
+      <circle cx="12" cy="16" r="1"/>
+      <path d="M8 11v-4a4 4 0 0 1 8 0v4"/>
+    </symbol>
+    <!-- alert-triangle -->
+    <symbol id="ic-alert" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <path d="M12 9v4"/>
+      <path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </symbol>
+    <!-- plus -->
+    <symbol id="ic-plus" viewBox="0 0 24 24">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none"/>
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5" y1="12" x2="19" y2="12"/>
+    </symbol>
+  </svg>
+
+  <!-- Top bar -->
+  <div class="et-topbar">
+    <div class="et-topbar-logo">
+      <!-- Mark: pendulum lockup from eigentakt_calendar_reference.html — width/height match reference exactly -->
+      <svg width="14" height="20" viewBox="0 0 160 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <polygon points="0,220 160,220 104,16 56,16" fill="#4A5C3E"/>
+        <polygon points="56,16 104,16 98,0 62,0" fill="#3A4C2E"/>
+        <polygon points="36,204 124,204 96,68 64,68" fill="#F5F2EC"/>
+        <line x1="80" y1="202" x2="100" y2="76" stroke="#4A5C3E" stroke-width="6" stroke-linecap="round"/>
+        <rect x="94" y="86" width="13" height="13" rx="1" fill="#4A5C3E" transform="rotate(45 100.5 92.5)"/>
+      </svg>
+      <span class="et-wordmark">eigentakt</span>
+    </div>
+    <div class="et-topbar-right">
+      <button class="et-btn">
+        <svg class="ic ic-sm"><use href="#ic-refresh"/></svg> Sync
+      </button>
+      <div class="et-avatar">RF</div>
+    </div>
+  </div>
+
+  <div class="et-layout">
+
+    <!-- Sidebar -->
+    <aside class="et-sidebar">
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon active" aria-label="This week">
+          <svg class="ic ic-lg"><use href="#ic-calendar-week"/></svg>
+        </button>
+        <span class="et-sidebar-tooltip">This week</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Plan history">
+          <svg class="ic ic-lg"><use href="#ic-history"/></svg>
+        </button>
+        <span class="et-sidebar-tooltip">Plan history</span>
+      </div>
+      <div class="et-sidebar-divider"></div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Goals">
+          <svg class="ic ic-lg"><use href="#ic-target"/></svg>
+        </button>
+        <span class="et-sidebar-tooltip">Goals</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Weekly template">
+          <svg class="ic ic-lg"><use href="#ic-clock"/></svg>
+        </button>
+        <span class="et-sidebar-tooltip">Weekly template</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Profile">
+          <svg class="ic ic-lg"><use href="#ic-user"/></svg>
+        </button>
+        <span class="et-sidebar-tooltip">Profile</span>
+      </div>
+      <div class="et-sidebar-bottom">
+        <div class="et-sidebar-divider"></div>
+        <div class="et-sidebar-item">
+          <button class="et-sidebar-icon" aria-label="Upcoming events" style="position:relative;">
+            <svg class="ic ic-lg"><use href="#ic-flag"/></svg>
+            <span class="et-event-dot"></span>
+          </button>
+          <span class="et-sidebar-tooltip">Flying Wheels · 12 days</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="et-main" style="position:relative;">
+
+      <!-- Empty week overlay (toggle via demo controls) -->
+      <div class="et-empty-week-overlay" id="emptyWeekOverlay">
+        <svg class="et-empty-week-mark" width="32" height="46" viewBox="0 0 160 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <polygon points="0,220 160,220 104,16 56,16" fill="#2C2C2A"/>
+          <polygon points="56,16 104,16 98,0 62,0" fill="#171715"/>
+          <polygon points="36,204 124,204 96,68 64,68" fill="#F5F2EC"/>
+          <line x1="80" y1="202" x2="100" y2="76" stroke="#2C2C2A" stroke-width="6" stroke-linecap="round"/>
+          <rect x="94" y="86" width="13" height="13" rx="1" fill="#2C2C2A" transform="rotate(45 100.5 92.5)"/>
+        </svg>
+        <div>
+          <p class="et-empty-week-label">No plan for this week.</p>
+        </div>
+        <p class="et-empty-week-sub">eigentakt will build a plan from your Strava history and weekly template. You can edit or move anything after.</p>
+        <button class="et-generate-cta">
+          <svg class="ic ic-sm" style="color:var(--et-bone)"><use href="#ic-wand"/></svg>
+          Generate this week
+        </button>
+      </div>
+
+      <!-- Header -->
+      <div class="et-main-header">
+        <div class="et-week-nav">
+          <button class="et-btn et-btn-icon" aria-label="Previous week">
+            <svg class="ic ic-sm"><use href="#ic-chevron-left"/></svg>
+          </button>
+          <div class="et-week-info">
+            <span class="et-week-title">May 18 – 24, 2026</span>
+            <div class="et-week-meta">
+              <span class="et-week-sub">Flying Wheels in 12 days</span>
+              <span class="et-focus-badge">Focus: peak build</span>
+            </div>
+          </div>
+          <button class="et-btn et-btn-icon" aria-label="Next week">
+            <svg class="ic ic-sm"><use href="#ic-chevron-right"/></svg>
+          </button>
+        </div>
+        <div class="et-header-right">
+          <button class="et-btn">
+            <svg class="ic ic-sm"><use href="#ic-refresh"/></svg> Evaluate
+          </button>
+          <div class="et-split-btn" id="splitBtn">
+            <button class="et-split-main">
+              <svg class="ic ic-sm" style="color:var(--et-bone)"><use href="#ic-wand"/></svg> Generate
+            </button>
+            <button class="et-split-arrow" aria-label="More generation options" id="splitArrow">
+              <svg class="ic ic-sm" style="color:var(--et-bone)"><use href="#ic-chevron-down"/></svg>
+            </button>
+            <div class="et-dropdown">
+              <div class="et-dropdown-item">
+                <span class="et-dropdown-label">
+                  <svg class="ic ic-sm" style="color:var(--et-olive)"><use href="#ic-wand"/></svg>
+                  Regenerate plan
+                </span>
+                <span class="et-dropdown-sub">Replace all non-fixed activities</span>
+              </div>
+              <div class="et-dropdown-item">
+                <span class="et-dropdown-label">
+                  <svg class="ic ic-sm" style="color:var(--et-olive)"><use href="#ic-sparkles"/></svg>
+                  Fill empty days
+                </span>
+                <span class="et-dropdown-sub">Generate only for days with no activity</span>
+              </div>
+              <div class="et-dropdown-divider"></div>
+              <div class="et-dropdown-item">
+                <span class="et-dropdown-label destructive">
+                  <svg class="ic ic-sm" style="color:var(--et-red)"><use href="#ic-trash"/></svg>
+                  Start fresh
+                </span>
+                <span class="et-dropdown-sub">Clear all activities and generate new</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assessment banner -->
+      <div class="et-assessment">
+        <div class="et-assessment-row">
+          <div class="et-assessment-signal">
+            <div class="et-signal-dot et-signal-green"></div>
+            <div>
+              <p class="et-signal-label">Volume</p>
+              <p class="et-signal-text">340 min — on target.</p>
+            </div>
+          </div>
+          <div class="et-assessment-signal">
+            <div class="et-signal-dot et-signal-green"></div>
+            <div>
+              <p class="et-signal-label">Sport balance</p>
+              <p class="et-signal-text">75% cycling — right for Flying Wheels.</p>
+            </div>
+          </div>
+          <div class="et-assessment-signal">
+            <div class="et-signal-dot et-signal-amber"></div>
+            <div>
+              <p class="et-signal-label">Progression</p>
+              <p class="et-signal-text">+18% vs last week — monitor.</p>
+            </div>
+          </div>
+          <div class="et-assessment-signal">
+            <div class="et-signal-dot et-signal-green"></div>
+            <div>
+              <p class="et-signal-label">Event readiness</p>
+              <p class="et-signal-text">Appropriate for 12 days out.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grid -->
+      <div class="et-grid-wrap">
+        <div class="et-grid" id="calGrid">
+
+          <!-- Sunday -->
+          <div class="et-day-col" data-day="sun">
+            <div class="et-day-header">
+              <p class="et-day-name">Sun</p>
+              <p class="et-day-date">18</p>
+            </div>
+            <div class="et-card" draggable="true" data-card="ride-sun">
+              <div class="et-card-type">
+                <svg class="ic ic-sm et-card-icon"><use href="#ic-bike"/></svg>
+                <span class="et-card-label">Ride</span>
+              </div>
+              <span class="et-intensity et-intensity-moderate">Moderate</span>
+              <p class="et-card-meta">3 hr · Morning</p>
+              <p class="et-card-desc">Long aerobic ride, 110–125W. Two climbs at Zone 3.</p>
+              <div class="et-card-weather">
+                <svg class="ic ic-xs"><use href="#ic-sun"/></svg> Clear, 14°C
+              </div>
+              <div class="et-card-actions">
+                <button class="et-card-btn" aria-label="Edit"><svg class="ic ic-sm"><use href="#ic-edit"/></svg></button>
+                <button class="et-card-btn" aria-label="Delete"><svg class="ic ic-sm"><use href="#ic-trash"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Monday (today) -->
+          <div class="et-day-col" data-day="mon">
+            <div class="et-day-header">
+              <p class="et-day-name">Mon</p>
+              <p class="et-day-date today">19</p>
+            </div>
+            <div class="et-card" draggable="true" data-card="yoga-mon">
+              <div class="et-card-type">
+                <svg class="ic ic-sm et-card-icon"><use href="#ic-body"/></svg>
+                <span class="et-card-label">Yoga</span>
+              </div>
+              <span class="et-intensity et-intensity-easy">Easy</span>
+              <p class="et-card-meta">30 min · Morning</p>
+              <p class="et-card-desc">Active recovery. Hip flexors, hamstrings after long ride.</p>
+              <div class="et-card-weather">
+                <svg class="ic ic-xs"><use href="#ic-cloud-rain"/></svg> Rainy — indoor
+              </div>
+              <div class="et-card-actions">
+                <button class="et-card-btn" aria-label="Edit"><svg class="ic ic-sm"><use href="#ic-edit"/></svg></button>
+                <button class="et-card-btn" aria-label="Delete"><svg class="ic ic-sm"><use href="#ic-trash"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tuesday -->
+          <div class="et-day-col" data-day="tue">
+            <div class="et-day-header">
+              <p class="et-day-name">Tue</p>
+              <p class="et-day-date">20</p>
+            </div>
+            <div class="et-card" draggable="true" data-card="run-tue">
+              <div class="et-card-type">
+                <svg class="ic ic-sm et-card-icon"><use href="#ic-run"/></svg>
+                <span class="et-card-label">Run</span>
+              </div>
+              <span class="et-intensity et-intensity-moderate">Moderate</span>
+              <p class="et-card-meta">45 min · Evening</p>
+              <p class="et-card-desc">Tempo run. 25 min at Zone 3, 6:30–7:00/km.</p>
+              <div class="et-card-weather">
+                <svg class="ic ic-xs"><use href="#ic-cloud"/></svg> Cloudy, 16°C
+              </div>
+              <div class="et-card-actions">
+                <button class="et-card-btn" aria-label="Edit"><svg class="ic ic-sm"><use href="#ic-edit"/></svg></button>
+                <button class="et-card-btn" aria-label="Delete"><svg class="ic ic-sm"><use href="#ic-trash"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Wednesday — stale -->
+          <div class="et-day-col" data-day="wed">
+            <div class="et-day-header">
+              <p class="et-day-name">Wed</p>
+              <p class="et-day-date">21</p>
+            </div>
+            <div class="et-card stale" draggable="true" data-card="virtual-wed">
+              <div class="et-card-corner">
+                <div class="et-stale-badge" aria-label="Needs refresh">
+                  <svg class="ic" style="width:7px;height:7px;color:#F5F2EC"><use href="#ic-refresh"/></svg>
+                </div>
+              </div>
+              <div class="et-card-type">
+                <svg class="ic ic-sm et-card-icon"><use href="#ic-bike"/></svg>
+                <span class="et-card-label">Virtual Ride</span>
+              </div>
+              <span class="et-intensity et-intensity-hard">Hard</span>
+              <p class="et-card-meta">60 min · Morning</p>
+              <p class="et-card-desc stale">Description needs refresh after edit.</p>
+              <div class="et-flag">
+                <svg class="ic" style="width:8px;height:8px;color:#6A4010;flex-shrink:0;margin-top:2px"><use href="#ic-alert"/></svg>
+                <p class="et-flag-text">Moved from Thu — check intensity after Tue run.</p>
+              </div>
+              <div class="et-card-actions">
+                <button class="et-card-btn stale-btn" aria-label="Refresh description"><svg class="ic ic-sm"><use href="#ic-refresh"/></svg></button>
+                <button class="et-card-btn" aria-label="Edit"><svg class="ic ic-sm"><use href="#ic-edit"/></svg></button>
+                <button class="et-card-btn" aria-label="Delete"><svg class="ic ic-sm"><use href="#ic-trash"/></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thursday — empty -->
+          <div class="et-day-col" data-day="thu">
+            <div class="et-day-header">
+              <p class="et-day-name">Thu</p>
+              <p class="et-day-date">22</p>
+            </div>
+            <div class="et-empty-slot" role="button" aria-label="Add or generate activity for Thursday">
+              <svg class="ic ic-md" style="color:#8A8A86"><use href="#ic-plus"/></svg>
+              <p class="et-empty-add">Add or Generate</p>
+            </div>
+          </div>
+
+          <!-- Friday — rest -->
+          <div class="et-day-col" data-day="fri">
+            <div class="et-day-header">
+              <p class="et-day-name">Fri</p>
+              <p class="et-day-date">23</p>
+            </div>
+            <div class="et-rest-slot">
+              <p class="et-rest-label">Rest</p>
+            </div>
+          </div>
+
+          <!-- Saturday — fixed -->
+          <div class="et-day-col" data-day="sat">
+            <div class="et-day-header">
+              <p class="et-day-name">Sat</p>
+              <p class="et-day-date">24</p>
+            </div>
+            <div class="et-card fixed" draggable="false" data-card="group-sat">
+              <div class="et-card-corner">
+                <svg class="ic et-lock-icon" style="width:10px;height:10px"><use href="#ic-lock"/></svg>
+              </div>
+              <div class="et-card-type">
+                <svg class="ic ic-sm et-card-icon"><use href="#ic-bike"/></svg>
+                <span class="et-card-label">Group Ride</span>
+              </div>
+              <span class="et-intensity et-intensity-moderate">Moderate</span>
+              <p class="et-card-meta">4 hr · Morning · Fixed</p>
+              <p class="et-card-desc">Flying Wheels preview. Steady effort, race simulation.</p>
+              <div class="et-card-weather">
+                <svg class="ic ic-xs"><use href="#ic-sun"/></svg> Clear, 18°C
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Drag ghost card -->
+  <div class="et-drag-demo-card" id="dragGhost">
+    <div class="et-card-type">
+      <svg class="ic ic-sm et-card-icon"><use href="#ic-run"/></svg>
+      <span class="et-card-label">Run</span>
+    </div>
+    <span class="et-intensity et-intensity-moderate">Moderate</span>
+    <p class="et-card-meta">45 min · Evening</p>
+    <p class="et-card-desc">Tempo run. 25 min at Zone 3.</p>
+  </div>
+
+  <!-- Demo controls -->
+  <div class="et-demo-controls">
+    <button class="et-demo-btn" id="demoNormal" onclick="setDemo('normal')">Normal view</button>
+    <button class="et-demo-btn" id="demoDragCompat" onclick="setDemo('drag-compatible')">Drag: compatible target</button>
+    <button class="et-demo-btn" id="demoDragIncompat" onclick="setDemo('drag-incompatible')">Drag: incompatible target</button>
+    <button class="et-demo-btn" id="demoEmpty" onclick="setDemo('empty-week')">Empty week state</button>
+  </div>
+
+  <script>
+    // Dropdown toggle
+    document.getElementById('splitArrow').addEventListener('click', function(e) {
+      e.stopPropagation();
+      document.getElementById('splitBtn').classList.toggle('open');
+    });
+    document.addEventListener('click', function(e) {
+      const btn = document.getElementById('splitBtn');
+      if (!btn.contains(e.target)) btn.classList.remove('open');
+    });
+
+    // Demo state switcher
+    function setDemo(mode) {
+      const grid = document.getElementById('calGrid');
+      const dayCols = grid.querySelectorAll('.et-day-col');
+      const ghost = document.getElementById('dragGhost');
+      const overlay = document.getElementById('emptyWeekOverlay');
+      const btns = document.querySelectorAll('.et-demo-btn');
+
+      // Reset all
+      dayCols.forEach(c => {
+        c.classList.remove('drop-compatible', 'drop-incompatible');
+      });
+      ghost.classList.remove('visible');
+      overlay.classList.remove('visible');
+      btns.forEach(b => b.classList.remove('active'));
+
+      // Hide/show source card
+      const runCard = grid.querySelector('[data-card="run-tue"]');
+
+      if (mode === 'normal') {
+        if (runCard) runCard.classList.remove('dragging');
+        document.getElementById('demoNormal').classList.add('active');
+      } else if (mode === 'drag-compatible') {
+        if (runCard) runCard.classList.add('dragging');
+        ghost.classList.add('visible');
+        // Thu column is compatible (empty)
+        grid.querySelector('[data-day="thu"]').classList.add('drop-compatible');
+        document.getElementById('demoDragCompat').classList.add('active');
+      } else if (mode === 'drag-incompatible') {
+        if (runCard) runCard.classList.add('dragging');
+        ghost.classList.add('visible');
+        // Sat column is incompatible (fixed)
+        grid.querySelector('[data-day="sat"]').classList.add('drop-incompatible');
+        document.getElementById('demoDragIncompat').classList.add('active');
+      } else if (mode === 'empty-week') {
+        if (runCard) runCard.classList.remove('dragging');
+        overlay.classList.add('visible');
+        document.getElementById('demoEmpty').classList.add('active');
+      }
+    }
+
+    setDemo('normal');
+
+    // Real drag-and-drop (basic)
+    let dragging = null;
+    document.querySelectorAll('.et-card[draggable="true"]').forEach(card => {
+      card.addEventListener('dragstart', e => {
+        dragging = card;
+        setTimeout(() => card.classList.add('dragging'), 0);
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('dragging');
+        document.querySelectorAll('.et-day-col').forEach(c => {
+          c.classList.remove('drop-compatible', 'drop-incompatible');
+        });
+        dragging = null;
+      });
+    });
+
+    document.querySelectorAll('.et-day-col').forEach(col => {
+      col.addEventListener('dragover', e => {
+        e.preventDefault();
+        if (!dragging) return;
+        const hasFixed = col.querySelector('.et-card.fixed');
+        col.classList.toggle('drop-compatible', !hasFixed);
+        col.classList.toggle('drop-incompatible', !!hasFixed);
+      });
+      col.addEventListener('dragleave', () => {
+        col.classList.remove('drop-compatible', 'drop-incompatible');
+      });
+      col.addEventListener('drop', e => {
+        e.preventDefault();
+        if (!dragging) return;
+        const hasFixed = col.querySelector('.et-card.fixed');
+        col.classList.remove('drop-compatible', 'drop-incompatible');
+        if (!hasFixed) {
+          // Move card, add stale state + flag
+          const emptySlot = col.querySelector('.et-empty-slot');
+          if (emptySlot) emptySlot.remove();
+          const restSlot = col.querySelector('.et-rest-slot');
+          if (restSlot) restSlot.remove();
+          dragging.classList.add('stale');
+          // Add stale badge if not already there
+          if (!dragging.querySelector('.et-stale-badge')) {
+            const corner = document.createElement('div');
+            corner.className = 'et-card-corner';
+            corner.innerHTML = '<div class="et-stale-badge"><i class="ti ti-refresh" style="font-size:7px;color:#F5F2EC;"></i></div>';
+            dragging.prepend(corner);
+          }
+          // Add flag if not already there
+          const existingFlag = dragging.querySelector('.et-flag');
+          if (!existingFlag) {
+            const fromDay = dragging.closest('.et-day-col').dataset.day;
+            const flag = document.createElement('div');
+            flag.className = 'et-flag';
+            flag.innerHTML = `<i class="ti ti-alert-triangle" style="font-size:8px;color:#6A4010;flex-shrink:0;margin-top:2px;"></i><p class="et-flag-text">Moved from ${fromDay} — description needs refresh.</p>`;
+            const actions = dragging.querySelector('.et-card-actions');
+            if (actions) dragging.insertBefore(flag, actions);
+            else dragging.appendChild(flag);
+          }
+          // Add stale desc style
+          const desc = dragging.querySelector('.et-card-desc');
+          if (desc) desc.classList.add('stale');
+          // Add refresh action if not there
+          const actions = dragging.querySelector('.et-card-actions');
+          if (actions && !actions.querySelector('.stale-btn')) {
+            const refreshBtn = document.createElement('button');
+            refreshBtn.className = 'et-card-btn stale-btn';
+            refreshBtn.setAttribute('aria-label', 'Refresh description');
+            refreshBtn.innerHTML = '<i class="ti ti-refresh"></i>';
+            actions.prepend(refreshBtn);
+          }
+          col.appendChild(dragging);
+          // Replace vacated day with empty slot
+          const prevCol = document.querySelector(`[data-card="${dragging.dataset.card}"]`)?.closest('.et-day-col');
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>

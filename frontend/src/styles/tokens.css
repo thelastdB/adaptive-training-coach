@@ -1,0 +1,29 @@
+:root {
+  --et-graphite: #2C2C2A;
+  --et-olive:    #4A5C3E;
+  --et-olive-dk: #3A4C2E;
+  --et-bone:     #F5F2EC;
+  --et-stone:    #6B6B67;
+  --et-border:   #D8D4CC;
+  --et-card:     #FFFFFF;
+  --et-surface:  #EDE9E2;
+  --et-amber:    #8A6020;
+  --et-red:      #8B3A3A;
+
+  /* Red tints */
+  --et-red-bg:     #F5EDED;
+  --et-red-border: #D8B4B4;
+
+  /* Signal dot text colors */
+  --et-signal-green: #1E4A14;
+  --et-signal-amber: #5A3A08;
+  --et-signal-red:   #5A1A1A;
+
+  /* Intensity badge */
+  --et-easy-bg:   #D0E8C8;
+  --et-easy-text: #1E4A14;
+  --et-mod-bg:    #E8D8A8;
+  --et-mod-text:  #5A3A08;
+  --et-hard-bg:   #E8C0C0;
+  --et-hard-text: #5A1A1A;
+}

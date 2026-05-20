@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>eigentakt — goals</title>
+
+  <!--
+    EIGENTAKT GOALS SETTINGS — DESIGN REFERENCE v1
+    ===============================================
+    Settings page for viewing and editing training goals and target events.
+    Shell matches eigentakt_calendar_reference.html exactly.
+
+    COLOR TOKENS
+    ------------
+    --et-graphite: #2C2C2A
+    --et-olive:    #4A5C3E
+    --et-olive-dk: #3A4C2E
+    --et-bone:     #F5F2EC
+    --et-stone:    #6B6B67
+    --et-border:   #D8D4CC
+    --et-card:     #FFFFFF
+    --et-surface:  #EDE9E2
+    --et-amber:    #8A6020
+    --et-red:      #8B3A3A
+
+    SECTIONS
+    --------
+    1. Primary goal — card selector, editable in-place
+    2. Active target event — form fields, save/delete
+    3. Add event — inline affordance if no event exists
+    4. Past events — read-only log table
+  -->
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens ── */
+    :root {
+      --et-graphite: #2C2C2A;
+      --et-olive:    #4A5C3E;
+      --et-olive-dk: #3A4C2E;
+      --et-bone:     #F5F2EC;
+      --et-stone:    #6B6B67;
+      --et-border:   #D8D4CC;
+      --et-card:     #FFFFFF;
+      --et-surface:  #EDE9E2;
+      --et-amber:    #8A6020;
+      --et-red:      #8B3A3A;
+    }
+
+    /* ── Base ── */
+    body {
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+      background: var(--et-bone);
+      color: var(--et-graphite);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Top bar ── */
+    .et-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      height: 44px;
+      background: var(--et-bone);
+      border-bottom: 0.5px solid var(--et-border);
+    }
+    .et-topbar-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .et-wordmark {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: var(--et-graphite);
+    }
+    .et-topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .et-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #D4CFC4;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--et-stone);
+    }
+
+    /* ── Layout ── */
+    .et-layout {
+      display: grid;
+      grid-template-columns: 48px 1fr;
+      height: calc(100vh - 44px);
+    }
+
+    /* ── Sidebar ── */
+    .et-sidebar {
+      border-right: 0.5px solid var(--et-border);
+      background: var(--et-bone);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 2px;
+      position: relative;
+      z-index: 10;
+    }
+    .et-sidebar-item {
+      position: relative;
+      width: 36px;
+    }
+    .et-sidebar-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      color: var(--et-stone);
+      cursor: pointer;
+      border: none;
+      background: none;
+    }
+    .et-sidebar-icon.active {
+      background: var(--et-surface);
+      color: var(--et-graphite);
+    }
+    .et-sidebar-icon:hover {
+      background: var(--et-surface);
+      color: var(--et-olive);
+    }
+    .et-sidebar-tooltip {
+      position: absolute;
+      left: 44px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--et-graphite);
+      color: var(--et-bone);
+      font-size: 11px;
+      white-space: nowrap;
+      padding: 4px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.12s;
+      z-index: 100;
+    }
+    .et-sidebar-item:hover .et-sidebar-tooltip { opacity: 1; }
+    .et-sidebar-divider {
+      width: 24px;
+      height: 0.5px;
+      background: var(--et-border);
+      margin: 6px 0;
+    }
+    .et-sidebar-bottom {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .et-event-dot {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--et-olive);
+    }
+
+    /* ── Main ── */
+    .et-main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Page header ── */
+    .et-page-header {
+      padding: 0 24px;
+      height: 44px;
+      border-bottom: 0.5px solid var(--et-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .et-page-title {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+    }
+
+    /* ── Scrollable content ── */
+    .et-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 24px 40px;
+    }
+
+    /* ── Section ── */
+    .et-section {
+      margin-bottom: 32px;
+    }
+    .et-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .et-section-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+    }
+    .et-section-divider {
+      height: 0.5px;
+      background: var(--et-border);
+      margin-bottom: 16px;
+    }
+
+    /* ── Shared button ── */
+    .et-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 0.5px solid #A8A4A0;
+      background: var(--et-surface);
+      color: var(--et-graphite);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .et-btn i { font-size: 12px; }
+    .et-btn:hover { background: var(--et-border); }
+    .et-btn-primary {
+      background: var(--et-olive);
+      color: var(--et-bone);
+      border-color: var(--et-olive-dk);
+    }
+    .et-btn-primary:hover { background: var(--et-olive-dk); }
+    .et-btn-ghost {
+      background: none;
+      border-color: transparent;
+      color: var(--et-stone);
+    }
+    .et-btn-ghost:hover { background: var(--et-surface); color: var(--et-graphite); }
+    .et-btn-destructive {
+      background: none;
+      border-color: transparent;
+      color: var(--et-red);
+    }
+    .et-btn-destructive:hover { background: #F5EDED; border-color: #D8B4B4; }
+
+    /* ── Goal cards ── */
+    .et-goal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      max-width: 640px;
+    }
+    .et-goal-card {
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      padding: 14px 14px 12px;
+      cursor: pointer;
+      position: relative;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .et-goal-card:hover { border-color: #B0B0AC; background: var(--et-surface); }
+    .et-goal-card.selected {
+      border: 1px solid var(--et-olive);
+      background: var(--et-card);
+    }
+    .et-goal-card.selected::after {
+      content: '';
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--et-olive);
+    }
+    .et-goal-icon {
+      font-size: 16px;
+      color: var(--et-stone);
+      margin-bottom: 8px;
+    }
+    .et-goal-card.selected .et-goal-icon { color: var(--et-olive); }
+    .et-goal-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      margin-bottom: 3px;
+    }
+    .et-goal-desc {
+      font-size: 11px;
+      color: var(--et-stone);
+      line-height: 1.5;
+    }
+    .et-goal-change-hint {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+
+    /* ── Event card ── */
+    .et-event-block {
+      background: var(--et-card);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      max-width: 640px;
+      overflow: hidden;
+    }
+    .et-event-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 11px 14px;
+      border-bottom: 0.5px solid var(--et-border);
+      background: var(--et-surface);
+    }
+    .et-event-block-title {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--et-graphite);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .et-event-block-title i { font-size: 13px; color: var(--et-olive); }
+    .et-event-block-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .et-event-form {
+      padding: 16px 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .et-event-form .full { grid-column: 1 / -1; }
+    .et-field-label {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--et-stone);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    .et-input,
+    .et-select {
+      width: 100%;
+      height: 32px;
+      padding: 0 10px;
+      border: 0.5px solid var(--et-border);
+      border-radius: 4px;
+      background: var(--et-bone);
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--et-graphite);
+      outline: none;
+      appearance: none;
+      transition: border-color 0.15s;
+    }
+    .et-input:focus,
+    .et-select:focus { border-color: var(--et-olive); background: var(--et-card); }
+    .et-input::placeholder { color: #B0ACA6; }
+    .et-select-wrap { position: relative; }
+    .et-select-wrap::after {
+      content: '\ea5f';
+      font-family: 'tabler-icons';
+      position: absolute;
+      right: 9px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--et-stone);
+      pointer-events: none;
+    }
+    .et-select { padding-right: 26px; }
+
+    /* Countdown chip inside event header */
+    .et-countdown-chip {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--et-olive);
+      background: #D8E8D0;
+      padding: 2px 7px;
+      border-radius: 3px;
+      margin-left: 4px;
+    }
+
+    /* Event form footer */
+    .et-event-form-footer {
+      padding: 10px 14px 12px;
+      border-top: 0.5px solid var(--et-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .et-unsaved-note {
+      font-size: 10px;
+      color: var(--et-amber);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+      display: none;
+    }
+    .et-unsaved-note.visible { display: block; }
+
+    /* ── No-event affordance ── */
+    .et-no-event {
+      max-width: 640px;
+      border: 0.5px dashed var(--et-border);
+      border-radius: 6px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .et-no-event-text {
+      font-size: 12px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+
+    /* ── Past events table ── */
+    .et-past-table {
+      max-width: 640px;
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--et-card);
+    }
+    .et-table-header {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 80px;
+      padding: 7px 14px;
+      border-bottom: 0.5px solid var(--et-border);
+      background: var(--et-surface);
+    }
+    .et-th {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--et-stone);
+    }
+    .et-table-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 80px;
+      padding: 10px 14px;
+      border-bottom: 0.5px solid var(--et-surface);
+      align-items: center;
+    }
+    .et-table-row:last-child { border-bottom: none; }
+    .et-table-row:hover { background: var(--et-bone); }
+    .et-td {
+      font-size: 12px;
+      color: var(--et-graphite);
+    }
+    .et-td-sub {
+      font-size: 10px;
+      color: var(--et-stone);
+      margin-top: 2px;
+    }
+    .et-td-stone { color: var(--et-stone); }
+    .et-outcome-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .et-outcome-completed {
+      background: #D0E8C8;
+      color: #1E4A14;
+    }
+    .et-outcome-dns {
+      background: var(--et-surface);
+      color: var(--et-stone);
+    }
+    .et-outcome-modified {
+      background: #F0E8D0;
+      color: #5A3A08;
+    }
+
+    /* ── Inline edit mode toggle ── */
+    .et-editing-state { display: none; }
+    .et-view-state { display: flex; }
+
+    /* When .editing is applied to .et-event-block */
+    .et-event-block.editing .et-editing-state { display: flex; }
+    .et-event-block.editing .et-view-state { display: none; }
+
+    /* ── Readonly event display (view state) ── */
+    .et-event-readonly {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .et-event-readonly .full { grid-column: 1 / -1; }
+    .et-readonly-field { display: flex; flex-direction: column; gap: 3px; }
+    .et-readonly-value {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--et-graphite);
+    }
+    .et-readonly-sub {
+      font-size: 11px;
+      color: var(--et-stone);
+      font-family: 'Lora', Georgia, serif;
+      font-style: italic;
+    }
+
+    /* ── Goal change confirm bar ── */
+    .et-confirm-bar {
+      max-width: 640px;
+      background: var(--et-surface);
+      border: 0.5px solid var(--et-border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+    .et-confirm-bar.visible { display: flex; }
+    .et-confirm-text {
+      font-size: 12px;
+      color: var(--et-graphite);
+    }
+    .et-confirm-text span {
+      font-weight: 500;
+    }
+    .et-confirm-actions {
+      display: flex;
+      gap: 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Top bar ── -->
+  <div class="et-topbar">
+    <div class="et-topbar-logo">
+      <svg width="14" height="20" viewBox="0 0 160 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <polygon points="0,220 160,220 104,16 56,16" fill="#4A5C3E"/>
+        <polygon points="56,16 104,16 98,0 62,0" fill="#3A4C2E"/>
+        <polygon points="36,204 124,204 96,68 64,68" fill="#F5F2EC"/>
+        <line x1="80" y1="202" x2="100" y2="76" stroke="#4A5C3E" stroke-width="6" stroke-linecap="round"/>
+        <rect x="94" y="86" width="13" height="13" rx="1" fill="#4A5C3E" transform="rotate(45 100.5 92.5)"/>
+      </svg>
+      <span class="et-wordmark">eigentakt</span>
+    </div>
+    <div class="et-topbar-right">
+      <button class="et-btn"><i class="ti ti-refresh"></i> Sync</button>
+      <div class="et-avatar">RF</div>
+    </div>
+  </div>
+
+  <div class="et-layout">
+
+    <!-- ── Sidebar ── -->
+    <aside class="et-sidebar">
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="This week"><i class="ti ti-calendar-week"></i></button>
+        <span class="et-sidebar-tooltip">This week</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Plan history"><i class="ti ti-history"></i></button>
+        <span class="et-sidebar-tooltip">Plan history</span>
+      </div>
+      <div class="et-sidebar-divider"></div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon active" aria-label="Goals"><i class="ti ti-target"></i></button>
+        <span class="et-sidebar-tooltip">Goals</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Weekly template"><i class="ti ti-clock"></i></button>
+        <span class="et-sidebar-tooltip">Weekly template</span>
+      </div>
+      <div class="et-sidebar-item">
+        <button class="et-sidebar-icon" aria-label="Profile"><i class="ti ti-user"></i></button>
+        <span class="et-sidebar-tooltip">Profile</span>
+      </div>
+      <div class="et-sidebar-bottom">
+        <div class="et-sidebar-divider"></div>
+        <div class="et-sidebar-item">
+          <button class="et-sidebar-icon" aria-label="Upcoming events" style="position:relative;">
+            <i class="ti ti-flag"></i>
+            <span class="et-event-dot"></span>
+          </button>
+          <span class="et-sidebar-tooltip">Flying Wheels · 12 days</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Main ── -->
+    <main class="et-main">
+
+      <div class="et-page-header">
+        <span class="et-page-title">Goals</span>
+      </div>
+
+      <div class="et-content">
+
+        <!-- ── Section: Primary goal ── -->
+        <div class="et-section">
+          <div class="et-section-header">
+            <span class="et-section-label">Primary goal</span>
+          </div>
+          <div class="et-section-divider"></div>
+
+          <div class="et-goal-grid" id="goalGrid">
+            <div class="et-goal-card selected" data-goal="event" onclick="selectGoal(this)">
+              <div class="et-goal-icon"><i class="ti ti-flag"></i></div>
+              <p class="et-goal-title">Target event</p>
+              <p class="et-goal-desc">A specific race, gran fondo, or event on a fixed date.</p>
+            </div>
+            <div class="et-goal-card" data-goal="base" onclick="selectGoal(this)">
+              <div class="et-goal-icon"><i class="ti ti-trending-up"></i></div>
+              <p class="et-goal-title">Build a base</p>
+              <p class="et-goal-desc">Structured aerobic development without a fixed deadline.</p>
+            </div>
+            <div class="et-goal-card" data-goal="return" onclick="selectGoal(this)">
+              <div class="et-goal-icon"><i class="ti ti-refresh"></i></div>
+              <p class="et-goal-title">Return to training</p>
+              <p class="et-goal-desc">Getting back to consistent training after a break.</p>
+            </div>
+          </div>
+
+          <!-- Confirm bar: appears when goal type changes -->
+          <div class="et-confirm-bar" id="goalConfirmBar">
+            <span class="et-confirm-text">Change goal to <span id="goalConfirmLabel">—</span>? Your current event will be archived.</span>
+            <div class="et-confirm-actions">
+              <button class="et-btn et-btn-ghost" onclick="cancelGoalChange()">Cancel</button>
+              <button class="et-btn et-btn-primary" onclick="confirmGoalChange()"><i class="ti ti-check"></i> Confirm</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Section: Target event ── -->
+        <div class="et-section" id="eventSection">
+          <div class="et-section-header">
+            <span class="et-section-label">Target event</span>
+          </div>
+          <div class="et-section-divider"></div>
+
+          <div class="et-event-block" id="eventBlock">
+
+            <!-- View state -->
+            <div class="et-event-block-header">
+              <span class="et-event-block-title">
+                <i class="ti ti-flag"></i>
+                Flying Wheels Gran Fondo
+                <span class="et-countdown-chip">12 days</span>
+              </span>
+              <div class="et-event-block-actions">
+                <button class="et-btn et-btn-ghost" onclick="startEditEvent()"><i class="ti ti-edit"></i> Edit</button>
+                <button class="et-btn et-btn-destructive" onclick="confirmDeleteEvent()"><i class="ti ti-trash"></i></button>
+              </div>
+            </div>
+
+            <div class="et-event-readonly" id="eventReadonly">
+              <div class="et-readonly-field">
+                <span class="et-field-label">Event name</span>
+                <span class="et-readonly-value">Flying Wheels Gran Fondo</span>
+              </div>
+              <div class="et-readonly-field">
+                <span class="et-field-label">Date</span>
+                <span class="et-readonly-value">May 31, 2026</span>
+                <span class="et-readonly-sub">12 days from today</span>
+              </div>
+              <div class="et-readonly-field">
+                <span class="et-field-label">Sport</span>
+                <span class="et-readonly-value">Cycling</span>
+              </div>
+              <div class="et-readonly-field">
+                <span class="et-field-label">Distance / duration</span>
+                <span class="et-readonly-value">130 km</span>
+                <span class="et-readonly-sub">approx. 4.5 hr</span>
+              </div>
+            </div>
+
+            <!-- Edit state (hidden by default) -->
+            <form class="et-event-form" id="eventForm" style="display:none;" onsubmit="saveEvent(event)">
+              <div class="full">
+                <p class="et-field-label">Event name</p>
+                <input class="et-input" type="text" value="Flying Wheels Gran Fondo" placeholder="e.g. Cascade Classic" oninput="markUnsaved()" />
+              </div>
+              <div>
+                <p class="et-field-label">Date</p>
+                <input class="et-input" type="date" value="2026-05-31" oninput="markUnsaved()" />
+              </div>
+              <div>
+                <p class="et-field-label">Sport</p>
+                <div class="et-select-wrap">
+                  <select class="et-select" onchange="markUnsaved()">
+                    <option value="cycling" selected>Cycling</option>
+                    <option value="running">Running</option>
+                    <option value="triathlon">Triathlon</option>
+                    <option value="gravel">Gravel</option>
+                    <option value="mtb">Mountain bike</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <div class="full">
+                <p class="et-field-label">Distance or duration <span style="color:#B0ACA6; font-weight:400; font-size:9px; letter-spacing:0;">(optional)</span></p>
+                <input class="et-input" type="text" value="130 km" placeholder="e.g. 130 km, 5 hrs" oninput="markUnsaved()" />
+              </div>
+            </form>
+            <div class="et-event-form-footer" id="eventFormFooter" style="display:none;">
+              <span class="et-unsaved-note" id="unsavedNote">Unsaved changes</span>
+              <div style="display:flex; gap:6px; margin-left:auto;">
+                <button class="et-btn et-btn-ghost" type="button" onclick="cancelEditEvent()">Cancel</button>
+                <button class="et-btn et-btn-primary" type="button" onclick="saveEvent()"><i class="ti ti-check"></i> Save changes</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Delete confirmation (hidden by default) -->
+          <div class="et-confirm-bar" id="deleteConfirmBar" style="margin-top:8px;">
+            <span class="et-confirm-text">Remove <span style="font-weight:500;">Flying Wheels Gran Fondo</span>? The event will be archived to past events.</span>
+            <div class="et-confirm-actions">
+              <button class="et-btn et-btn-ghost" onclick="cancelDeleteEvent()">Cancel</button>
+              <button class="et-btn et-btn-destructive" style="border-color:#D8B4B4; background:#F5EDED;" onclick="executeDeleteEvent()"><i class="ti ti-trash"></i> Remove</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Section: Add event (shown when no active event) ── -->
+        <div class="et-section" id="addEventSection" style="display:none;">
+          <div class="et-section-header">
+            <span class="et-section-label">Target event</span>
+          </div>
+          <div class="et-section-divider"></div>
+          <div class="et-no-event">
+            <span class="et-no-event-text">No target event set. eigentakt will plan for general progression.</span>
+            <button class="et-btn" onclick="showAddEvent()"><i class="ti ti-plus"></i> Add event</button>
+          </div>
+
+          <!-- Add event form (hidden until Add event clicked) -->
+          <div class="et-event-block" id="addEventBlock" style="display:none; margin-top:10px;">
+            <div class="et-event-block-header">
+              <span class="et-event-block-title"><i class="ti ti-flag"></i> New target event</span>
+              <div class="et-event-block-actions">
+                <button class="et-btn et-btn-ghost" onclick="hideAddEvent()">Cancel</button>
+              </div>
+            </div>
+            <div class="et-event-form">
+              <div class="full">
+                <p class="et-field-label">Event name</p>
+                <input class="et-input" type="text" placeholder="e.g. Cascade Classic" />
+              </div>
+              <div>
+                <p class="et-field-label">Date</p>
+                <input class="et-input" type="date" />
+              </div>
+              <div>
+                <p class="et-field-label">Sport</p>
+                <div class="et-select-wrap">
+                  <select class="et-select">
+                    <option value="">Select sport</option>
+                    <option value="cycling">Cycling</option>
+                    <option value="running">Running</option>
+                    <option value="triathlon">Triathlon</option>
+                    <option value="gravel">Gravel</option>
+                    <option value="mtb">Mountain bike</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+              </div>
+              <div class="full">
+                <p class="et-field-label">Distance or duration <span style="color:#B0ACA6; font-weight:400; font-size:9px; letter-spacing:0;">(optional)</span></p>
+                <input class="et-input" type="text" placeholder="e.g. 130 km, 5 hrs" />
+              </div>
+            </div>
+            <div class="et-event-form-footer">
+              <span></span>
+              <div style="display:flex; gap:6px;">
+                <button class="et-btn et-btn-ghost" onclick="hideAddEvent()">Cancel</button>
+                <button class="et-btn et-btn-primary"><i class="ti ti-check"></i> Add event</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Section: Past events ── -->
+        <div class="et-section">
+          <div class="et-section-header">
+            <span class="et-section-label">Past events</span>
+          </div>
+          <div class="et-section-divider"></div>
+
+          <div class="et-past-table">
+            <div class="et-table-header">
+              <span class="et-th">Event</span>
+              <span class="et-th">Date</span>
+              <span class="et-th">Sport</span>
+              <span class="et-th">Outcome</span>
+            </div>
+
+            <div class="et-table-row">
+              <div class="et-td">
+                Leavenworth Fondo
+                <div class="et-td-sub">~110 km · 4.5 hr</div>
+              </div>
+              <div class="et-td et-td-stone">Sep 14, 2025</div>
+              <div class="et-td et-td-stone">Cycling</div>
+              <div class="et-td">
+                <span class="et-outcome-badge et-outcome-completed"><i class="ti ti-check" style="font-size:9px;"></i> Completed</span>
+              </div>
+            </div>
+
+            <div class="et-table-row">
+              <div class="et-td">
+                STP Day 1
+                <div class="et-td-sub">~210 km · single day</div>
+              </div>
+              <div class="et-td et-td-stone">Jul 12, 2025</div>
+              <div class="et-td et-td-stone">Cycling</div>
+              <div class="et-td">
+                <span class="et-outcome-badge et-outcome-completed"><i class="ti ti-check" style="font-size:9px;"></i> Completed</span>
+              </div>
+            </div>
+
+            <div class="et-table-row">
+              <div class="et-td">
+                Chilly Hilly
+                <div class="et-td-sub">~33 km</div>
+              </div>
+              <div class="et-td et-td-stone">Feb 23, 2025</div>
+              <div class="et-td et-td-stone">Cycling</div>
+              <div class="et-td">
+                <span class="et-outcome-badge et-outcome-modified">Modified</span>
+              </div>
+            </div>
+
+            <div class="et-table-row">
+              <div class="et-td">
+                Seattle Half Marathon
+                <div class="et-td-sub">21.1 km</div>
+              </div>
+              <div class="et-td et-td-stone">Nov 30, 2024</div>
+              <div class="et-td et-td-stone">Running</div>
+              <div class="et-td">
+                <span class="et-outcome-badge et-outcome-dns">DNS</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const GOAL_LABELS = {
+      event: 'Target event',
+      base: 'Build a base',
+      return: 'Return to training',
+    };
+
+    let currentGoal = 'event';
+    let pendingGoal = null;
+
+    function selectGoal(card) {
+      const goal = card.dataset.goal;
+      if (goal === currentGoal) return;
+      pendingGoal = goal;
+
+      document.querySelectorAll('.et-goal-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+
+      document.getElementById('goalConfirmLabel').textContent = GOAL_LABELS[goal];
+      document.getElementById('goalConfirmBar').classList.add('visible');
+    }
+
+    function cancelGoalChange() {
+      // Revert selection
+      document.querySelectorAll('.et-goal-card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.goal === currentGoal);
+      });
+      pendingGoal = null;
+      document.getElementById('goalConfirmBar').classList.remove('visible');
+    }
+
+    function confirmGoalChange() {
+      currentGoal = pendingGoal;
+      pendingGoal = null;
+      document.getElementById('goalConfirmBar').classList.remove('visible');
+
+      const showEvent = currentGoal === 'event';
+      document.getElementById('eventSection').style.display = showEvent ? '' : 'none';
+      document.getElementById('addEventSection').style.display = showEvent ? '' : 'none';
+    }
+
+    // ── Event editing ──
+    function startEditEvent() {
+      document.getElementById('eventReadonly').style.display = 'none';
+      document.getElementById('eventForm').style.display = 'grid';
+      document.getElementById('eventFormFooter').style.display = 'flex';
+      // Hide edit/delete in header
+      document.querySelector('.et-event-block-actions').style.display = 'none';
+    }
+
+    function cancelEditEvent() {
+      document.getElementById('eventReadonly').style.display = 'grid';
+      document.getElementById('eventForm').style.display = 'none';
+      document.getElementById('eventFormFooter').style.display = 'none';
+      document.getElementById('unsavedNote').classList.remove('visible');
+      document.querySelector('.et-event-block-actions').style.display = 'flex';
+    }
+
+    function saveEvent() {
+      cancelEditEvent();
+    }
+
+    function markUnsaved() {
+      document.getElementById('unsavedNote').classList.add('visible');
+    }
+
+    // ── Delete event ──
+    function confirmDeleteEvent() {
+      document.getElementById('deleteConfirmBar').classList.add('visible');
+    }
+
+    function cancelDeleteEvent() {
+      document.getElementById('deleteConfirmBar').classList.remove('visible');
+    }
+
+    function executeDeleteEvent() {
+      document.getElementById('eventSection').style.display = 'none';
+      document.getElementById('addEventSection').style.display = '';
+      document.getElementById('deleteConfirmBar').classList.remove('visible');
+    }
+
+    // ── Add event ──
+    function showAddEvent() {
+      document.getElementById('addEventBlock').style.display = '';
+      document.querySelector('#addEventSection .et-no-event').style.display = 'none';
+    }
+
+    function hideAddEvent() {
+      document.getElementById('addEventBlock').style.display = 'none';
+      document.querySelector('#addEventSection .et-no-event').style.display = 'flex';
+    }
+  </script>
+
+</body>
+</html>
