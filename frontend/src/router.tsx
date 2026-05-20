@@ -7,6 +7,7 @@ import Onboarding from './pages/Onboarding'
 import Goals from './pages/Goals'
 import WeeklyTemplate from './pages/WeeklyTemplate'
 import Profile from './pages/Profile'
+import HistoricalWeekView from './pages/HistoricalWeekView'
 
 const rootRoute = createRootRoute({
   component: () => (
@@ -54,6 +55,12 @@ const appWeekRoute = createRoute({
   component: WeekView,
 })
 
+const appWeekIdRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: '/week/$weekId',
+  component: HistoricalWeekView,
+})
+
 const appGoalsRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/goals',
@@ -79,6 +86,7 @@ const routeTree = rootRoute.addChildren([
   appRoute.addChildren([
     appIndexRoute,
     appWeekRoute,
+    appWeekIdRoute,
     appGoalsRoute,
     appScheduleRoute,
     appProfileRoute,

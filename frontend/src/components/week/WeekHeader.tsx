@@ -15,6 +15,7 @@ interface Props {
   onFillEmpty: () => void;
   onStartFresh: () => void;
   onEvaluate: () => void;
+  readOnly?: boolean;
 }
 
 function formatWeekRange(start: Date): string {
@@ -40,6 +41,7 @@ export function WeekHeader({
   onFillEmpty,
   onStartFresh,
   onEvaluate,
+  readOnly = false,
 }: Props) {
   const eventCountdown =
     eventName && daysToEvent != null ? `${eventName} in ${daysToEvent} days` : undefined;
@@ -47,7 +49,7 @@ export function WeekHeader({
   return (
     <div className="et-main-header">
       <div className="et-week-nav">
-        <Button variant="icon" onClick={onPrevWeek} aria-label="Previous week">
+        <Button variant="icon" onClick={onPrevWeek} aria-label="Previous week" disabled={readOnly}>
           <Icon name="chevron-left" size="sm" aria-hidden />
         </Button>
 
@@ -61,58 +63,74 @@ export function WeekHeader({
           )}
         </div>
 
-        <Button variant="icon" onClick={onNextWeek} aria-label="Next week">
+        <Button variant="icon" onClick={onNextWeek} aria-label="Next week" disabled={readOnly}>
           <Icon name="chevron-right" size="sm" aria-hidden />
         </Button>
       </div>
 
       <div className="et-header-right">
-        <Button onClick={onEvaluate}>
-          <Icon name="refresh" size="sm" aria-hidden /> Evaluate
-        </Button>
+        {readOnly ? (
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 500,
+              color: 'var(--et-stone)',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Past week
+          </span>
+        ) : (
+          <>
+            <Button onClick={onEvaluate}>
+              <Icon name="refresh" size="sm" aria-hidden /> Evaluate
+            </Button>
 
-        <SplitButton
-          label={
-            <>
-              <Icon name="wand" size="sm" style={{ color: 'var(--et-bone)' }} aria-hidden />
-              <span className="et-split-label">Generate</span>
-            </>
-          }
-          onClick={onGenerate}
-        >
-          <DropdownItem
-            label={
-              <>
-                <Icon name="wand" size="sm" style={{ color: 'var(--et-olive)' }} aria-hidden />
-                Regenerate plan
-              </>
-            }
-            sublabel="Replace all non-fixed activities"
-            onClick={onRegenerate}
-          />
-          <DropdownItem
-            label={
-              <>
-                <Icon name="sparkles" size="sm" style={{ color: 'var(--et-olive)' }} aria-hidden />
-                Fill empty days
-              </>
-            }
-            sublabel="Generate only for days with no activity"
-            onClick={onFillEmpty}
-          />
-          <DropdownDivider />
-          <DropdownItem
-            label={
-              <>
-                <Icon name="trash" size="sm" style={{ color: 'var(--et-red)' }} aria-hidden />
-                Start fresh
-              </>
-            }
-            sublabel="Clear all activities and generate new"
-            destructive
-            onClick={onStartFresh}
-          />
-        </SplitButton>
+            <SplitButton
+              label={
+                <>
+                  <Icon name="wand" size="sm" style={{ color: 'var(--et-bone)' }} aria-hidden />
+                  <span className="et-split-label">Generate</span>
+                </>
+              }
+              onClick={onGenerate}
+            >
+              <DropdownItem
+                label={
+                  <>
+                    <Icon name="wand" size="sm" style={{ color: 'var(--et-olive)' }} aria-hidden />
+                    Regenerate plan
+                  </>
+                }
+                sublabel="Replace all non-fixed activities"
+                onClick={onRegenerate}
+              />
+              <DropdownItem
+                label={
+                  <>
+                    <Icon name="sparkles" size="sm" style={{ color: 'var(--et-olive)' }} aria-hidden />
+                    Fill empty days
+                  </>
+                }
+                sublabel="Generate only for days with no activity"
+                onClick={onFillEmpty}
+              />
+              <DropdownDivider />
+              <DropdownItem
+                label={
+                  <>
+                    <Icon name="trash" size="sm" style={{ color: 'var(--et-red)' }} aria-hidden />
+                    Start fresh
+                  </>
+                }
+                sublabel="Clear all activities and generate new"
+                destructive
+                onClick={onStartFresh}
+              />
+            </SplitButton>
+          </>
+        )}
       </div>
     </div>
   );

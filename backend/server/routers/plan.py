@@ -121,3 +121,14 @@ def plan_history(
     from db_supabase import get_plans
 
     return get_plans(user_id=user_id, limit=limit)
+
+
+@router.get("/{week_id}", response_model=ComputedPlanWeek)
+def get_plan_week(week_id: int, user_id: str = Depends(get_current_user)):
+    """Return a single past week plan by its integer id."""
+    from db_supabase import get_plan
+
+    raw = get_plan(week_id)
+    if raw is None or raw.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return _build_computed(raw)

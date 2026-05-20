@@ -36,16 +36,17 @@ function checkIsToday(d: Date): boolean {
 interface Props {
   plan: PlanWeek;
   onActivityMove: (fromDay: string, toDay: string) => void;
+  readOnly?: boolean;
 }
 
-export function WeekGrid({ plan, onActivityMove }: Props) {
+export function WeekGrid({ plan, onActivityMove, readOnly = false }: Props) {
   const [activeDay, setActiveDay] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  const [year, month, startDay] = plan.week_start.split('-').map(Number);
+  const [year, month, startDay] = plan.week_start_date.split('-').map(Number);
   const dayMap = new Map(plan.days.map((d) => [d.day, d]));
   const activeActivity = activeDay ? dayMap.get(activeDay) : undefined;
 
@@ -78,15 +79,18 @@ export function WeekGrid({ plan, onActivityMove }: Props) {
                 date={date.getDate()}
                 isToday={checkIsToday(date)}
                 activity={dayMap.get(day)}
+                readOnly={readOnly}
               />
             );
           })}
         </div>
       </div>
 
-      <DragOverlay dropAnimation={null}>
-        {activeActivity ? <ActivityCard activity={activeActivity} isGhost /> : null}
-      </DragOverlay>
+      {!readOnly && (
+        <DragOverlay dropAnimation={null}>
+          {activeActivity ? <ActivityCard activity={activeActivity} isGhost /> : null}
+        </DragOverlay>
+      )}
     </DndContext>
   );
 }

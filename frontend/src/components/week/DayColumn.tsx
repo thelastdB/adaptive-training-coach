@@ -11,6 +11,7 @@ interface DayColumnProps {
   isToday: boolean;
   activity?: ActivityDay;
   onAdd?: () => void;
+  readOnly?: boolean;
 }
 
 function DraggableCard(props: ActivityCardBaseProps) {
@@ -31,7 +32,7 @@ function DraggableCard(props: ActivityCardBaseProps) {
   );
 }
 
-export function DayColumn({ day, dayLabel, date, isToday, activity, onAdd }: DayColumnProps) {
+export function DayColumn({ day, dayLabel, date, isToday, activity, onAdd, readOnly = false }: DayColumnProps) {
   const hasFixed = !!activity && activity.is_fixed;
   const { isOver, setNodeRef } = useDroppable({ id: day });
 
@@ -52,7 +53,11 @@ export function DayColumn({ day, dayLabel, date, isToday, activity, onAdd }: Day
         <p className={`et-day-date${isToday ? ' today' : ''}`}>{date}</p>
       </div>
 
-      {activity && !isRest && <DraggableCard activity={activity} />}
+      {activity && !isRest && (
+        readOnly
+          ? <ActivityCard activity={activity} />
+          : <DraggableCard activity={activity} />
+      )}
       {isRest && <RestSlot />}
       {!activity && <EmptySlot day={day} onAdd={onAdd} />}
     </div>

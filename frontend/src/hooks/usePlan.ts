@@ -2,6 +2,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import type { PlanWeek } from '../types/plan';
 
+export function usePlanWeek(weekId: string) {
+  return useQuery<PlanWeek>({
+    queryKey: ['plan', weekId],
+    queryFn: () => api.get(`/plan/${weekId}`).then((r) => r.data),
+    retry: false,
+  });
+}
+
 export function usePlan() {
   return useQuery<PlanWeek>({
     queryKey: ['plan', 'current'],
@@ -27,7 +35,7 @@ export function useMoveActivity() {
       toDay,
       fromDay,
     }: {
-      weekId: string;
+      weekId: number;
       toDay: string;
       fromDay: string;
     }) =>

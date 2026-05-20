@@ -16,11 +16,11 @@ export function WeekView() {
   const moveActivity = useMoveActivity();
 
   const isEmpty = !isLoading && !plan;
-  const weekStart = plan ? parseWeekStart(plan.week_start) : new Date();
+  const weekStart = plan ? parseWeekStart(plan.week_start_date) : new Date();
 
   function handleActivityMove(fromDay: string, toDay: string) {
     if (!plan) return;
-    moveActivity.mutate({ weekId: plan.week_id, fromDay, toDay });
+    moveActivity.mutate({ weekId: plan.id, fromDay, toDay });
   }
 
   return (

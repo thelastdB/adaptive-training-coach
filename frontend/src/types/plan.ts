@@ -26,12 +26,15 @@ export interface Assessment {
   event_readiness: Signal;
 }
 
+// Field names match the API's ComputedPlanWeek response exactly.
+// Previously used week_id/week_start (aspirational names), but the API
+// returns id (integer PK) and week_start_date (ISO date string).
 export interface PlanWeek {
-  week_id: string;
-  week_start: string;
+  id: number;
+  week_start_date: string;
   focus: string;
-  event_name?: string;
-  days_to_event?: number;
+  event_name?: string | null;
+  days_to_event?: number | null;
   days: ActivityDay[];
-  assessment: Assessment;
+  assessment: Assessment | null;
 }
