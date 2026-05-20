@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -14,9 +15,12 @@ from server.routers import activities, auth, goals, plan, weather
 
 app = FastAPI(title="eigentakt API", version="1.0.0")
 
+_cors_raw = os.environ.get("CORS_ORIGINS", "*")
+_cors_origins = [o.strip() for o in _cors_raw.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

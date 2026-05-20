@@ -1,21 +1,57 @@
 import asyncio
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from server.deps import get_current_user
-from server.models.plan import ActivityPatch, PlanGenerateRequest, PlanGenerateResponse
+from server.models.plan import (
+    ActivityDay,
+    ActivityPatch,
+    Assessment,
+    ComputedPlanWeek,
+    PlanGenerateRequest,
+    PlanGenerateResponse,
+    PlanWeek,
+)
 
 router = APIRouter()
 
 
-@router.get("/current")
+def _build_computed(raw: dict) -> ComputedPlanWeek:
+    """Build a ComputedPlanWeek from the raw dict returned by _row_to_plan_dict()."""
+    blob: dict[str, Any] = raw.get("plan") or {}
+
+    days: list[ActivityDay] = []
+    for d in blob.get("days") or []:
+        try:
+            days.append(ActivityDay(**d))
+        except Exception:
+            pass
+
+    assessment: Assessment | None = None
+    if ca := blob.get("coaching_assessment"):
+        try:
+            assessment = Assessment(**ca)
+        except Exception:
+            pass
+
+    return ComputedPlanWeek(
+        **raw,
+        focus=blob.get("week_goal") or "",
+        days=days,
+        assessment=assessment,
+    )
+
+
+@router.get("/current", response_model=ComputedPlanWeek)
 def get_current_plan(user_id: str = Depends(get_current_user)):
     """Return the most recent generated plan for the current week."""
     from db_supabase import get_plans
+
     plans = get_plans(user_id=user_id, limit=1)
     if not plans:
         raise HTTPException(status_code=404, detail="No plan found")
-    return plans[0]
+    return _build_computed(plans[0])
 
 
 @router.post("/generate", response_model=PlanGenerateResponse)
@@ -29,7 +65,6 @@ async def generate(
 
     goals = await asyncio.to_thread(get_goals, user_id)
 
-    # Convert Pydantic schedule models to the plain dict generate_plan expects
     schedule = {day: s.model_dump() for day, s in body.schedule.items()}
     location = tuple(body.location) if body.location else DEFAULT_LOCATION
 
@@ -38,10 +73,10 @@ async def generate(
         schedule,
         body.goal,
         location,
-        None,       # recent_activities — auto-fetched by generate_plan using user_id
+        None,
         goals,
         body.units,
-        None,       # on_token — streaming not used via REST
+        None,
         user_id,
     )
     return plan
@@ -77,11 +112,12 @@ def evaluate_plan(
     return {"status": "ok", "week_id": week_id, "scores": {}}
 
 
-@router.get("/history")
+@router.get("/history", response_model=list[PlanWeek])
 def plan_history(
     limit: int = 10,
     user_id: str = Depends(get_current_user),
 ):
     """Return past generated plans, newest first."""
     from db_supabase import get_plans
+
     return get_plans(user_id=user_id, limit=limit)
