@@ -20,9 +20,9 @@ export function usePlan() {
 
 export function useGeneratePlan() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (mode?: 'fill' | 'fresh') =>
-      api.post('/plan/generate', mode ? { mode } : {}).then((r) => r.data),
+  return useMutation<PlanWeek, Error, void>({
+    mutationFn: () =>
+      api.post('/plan/generate', {}).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['plan', 'current'] }),
   });
 }
