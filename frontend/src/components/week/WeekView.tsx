@@ -35,7 +35,7 @@ export function WeekView() {
         </p>
         <button
           className="et-generate-cta"
-          onClick={() => generatePlan.mutate()}
+          onClick={() => generatePlan.mutate({})}
           disabled={generatePlan.isPending}
         >
           <Icon name="wand" size="sm" style={{ color: 'var(--et-bone)' }} aria-hidden />
@@ -46,12 +46,12 @@ export function WeekView() {
       <WeekHeader
         weekStart={weekStart}
         focus={plan?.focus}
-        eventName={plan?.event_name}
-        daysToEvent={plan?.days_to_event}
+        eventName={plan?.event_name ?? undefined}
+        daysToEvent={plan?.days_to_event ?? undefined}
         onPrevWeek={() => {}}
         onNextWeek={() => {}}
-        onGenerate={() => generatePlan.mutate()}
-        onRegenerate={() => generatePlan.mutate()}
+        onGenerate={() => generatePlan.mutate({})}
+        onRegenerate={() => generatePlan.mutate({})}
         onFillEmpty={() => generatePlan.mutate('fill')}
         onStartFresh={() => generatePlan.mutate('fresh')}
         onEvaluate={() => {}}

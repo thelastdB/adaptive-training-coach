@@ -28,7 +28,6 @@ export default function Goals() {
   const [pendingGoal, setPendingGoal] = useState<GoalType | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [hasEvent, setHasEvent] = useState(true)
-  const [showAddEvent, setShowAddEvent] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [unsaved, setUnsaved] = useState(false)
   const [eventDraft, setEventDraft] = useState<EventData>(INITIAL_EVENT)
@@ -77,7 +76,6 @@ export default function Goals() {
     setSavedEvent(e)
     setEventDraft(e)
     setHasEvent(true)
-    setShowAddEvent(false)
   }
 
   const displayGoal = pendingGoal ?? currentGoal

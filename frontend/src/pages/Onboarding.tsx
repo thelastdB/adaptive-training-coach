@@ -35,8 +35,6 @@ const DAYS = [
   { key: 'sun', label: 'Sun' },
 ]
 
-const TOTAL_STEPS = 4
-
 // Logo mark for the dark panel
 const PanelMark = () => (
   <svg width="14" height="20" viewBox="0 0 160 220" fill="none" aria-hidden="true">
